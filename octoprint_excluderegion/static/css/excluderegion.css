@@ -1,0 +1,67 @@
+
+div.gcode_canvas_wrapper {
+  position: relative;
+}
+
+#gcode_canvas {
+  position: relative;
+}
+
+#gcode_canvas_excludeRegions_overlay {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+#gcode_canvas_editRegion_overlay {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+#gcode_output_overlay {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  top: 0;
+  display: inline-block;
+}
+
+#gcode_exclude_controls .message {
+  display: none;
+}
+
+#gcode_exclude_controls .message .region {
+  display: none;
+}
+
+#gcode_exclude_controls .message .region .text {
+  display: none;
+}
+
+#gcode_exclude_controls .fa {
+  padding-right: 5px;
+}
+
+#gcode_exclude_controls .message .label {
+  margin-right: 5px;
+}
+
+#gcode_exclude_controls .message .action-buttons {
+  float: right;
+  margin-right: 20px;
+}
+
+#gcode_exclude_controls .message .action-buttons .btn.cancel .fa {
+  color: red;
+}
+
+#gcode_exclude_controls .message .action-buttons .btn.accept .fa {
+  color: green;
+}
+
+#gcode_exclude_controls .message .action-buttons .btn.delete .fa {
+  color: red;
+}
