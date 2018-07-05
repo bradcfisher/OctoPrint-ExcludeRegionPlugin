@@ -586,9 +586,10 @@ var fn = function() {
             }
         }
 
+        ctx.lineJoin = "round";
+
         for (i = fromProgress; i <= toProgress; i++) {
             if (typeof(cmds[i]) === 'undefined') continue;
-            ctx.lineWidth = lineWidthFactor;
             var cmd = cmds[i];
 
             if (cmd.prevX !== undefined && cmd.prevY !== undefined) {
@@ -629,6 +630,7 @@ var fn = function() {
                 strokePathIfNeeded("move", getColorMoveForTool(tool));
                 if(renderOptions["showMoves"]){
                     // move => draw line from (prevX, prevY) to (x, y) in move color
+                    ctx.lineWidth = lineWidthFactor;
                     ctx.lineTo(x,y);
                 }
             } else if(cmd.extrude) {
@@ -636,7 +638,7 @@ var fn = function() {
                     // no retraction => real extrusion move, use tool color to draw line
                     strokePathIfNeeded("extrude", getColorLineForTool(tool));
 
-                    ctx.lineWidth = renderOptions['extrusionWidth'];
+                    ctx.lineWidth = renderOptions['extrusionWidth'] * lineWidthFactor;
                     if (cmd.direction !== undefined && cmd.direction != 0){
                         var di = cmd.i;
                         var dj = cmd.j;
@@ -664,7 +666,10 @@ var fn = function() {
             prevX = x;
             prevY = y;
         }
-        strokePathIfNeeded("fill");
+        
+        if (prevPathType != "fill") {
+            ctx.stroke();
+        }
     };
 
     var applyOffsets = function() {

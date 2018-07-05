@@ -1,7 +1,7 @@
 $(function() {
 
 // TODO: If isActivePrintJob state changes while editing, the edit should be cancelled (notification to user when this happens?).
-  
+
   var INSIDE = 1;
   var TOP    = 2;
   var BOTTOM = 4;
@@ -202,6 +202,7 @@ $(function() {
     self.loginState = dependencies[1];
     self.printerState = dependencies[2];
     self.settings = dependencies[3];
+    self.touchui = dependencies[4];
 
     self.isFileSelected = ko.pureComputed(function() {
       return !!self.gcodeViewModel.selectedFile.path();
@@ -668,6 +669,10 @@ $(function() {
     }
     
     function addExcludeButtons() {
+      // Don't create buttons if using TouchUI, since they don't work anyway
+      if (self.touchui && self.touchui.isActive())
+        return;
+      
       if (!$("#gcode_exclude_controls").length) {
         $("#canvas_container").after(
           '<div id="gcode_exclude_controls">'+
@@ -727,8 +732,6 @@ $(function() {
             '</div>'+
           '</div>'
         );
-        
-//<i class="fa fa-comment-o">
 
         // Check if user isn't logged in
         if (!self.loginState.loggedIn()) {
@@ -808,15 +811,16 @@ $(function() {
       retrieveExcludeRegions();
     }
 
-    self.onSettingsHidden = function() {
+    function resetExcludeButtons() {
       removeExcludeButtons();
       addExcludeButtons();
     }
 
-    self.onUserLoggedIn = function() {
-      removeExcludeButtons();
-      addExcludeButtons();
+    if (self.touchui) {
+      self.touchui.isActive.subscribe(resetExcludeButtons);
     }
+    self.onSettingsHidden = resetExcludeButtons;
+    self.onUserLoggedIn = resetExcludeButtons;
 
     self.onUserLoggedOut = function() {
       removeExcludeButtons();
@@ -994,8 +998,8 @@ $(function() {
 
   OCTOPRINT_VIEWMODELS.push({
     "construct": ExcludeRegionPluginViewModel,
-    "dependencies": ["gcodeViewModel", "loginStateViewModel", "printerStateViewModel", "settingsViewModel"],
-    "optional": [],
+    "dependencies": ["gcodeViewModel", "loginStateViewModel", "printerStateViewModel", "settingsViewModel", "touchUIViewModel"],
+    "optional": ["touchUIViewModel"],
     "elements": [] //["#gcode_exclude_controls"]
   });
 
