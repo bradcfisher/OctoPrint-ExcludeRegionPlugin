@@ -6,16 +6,24 @@ var fn = function() {
     return;
   }
 
+  if (GCODE.renderer.getOptions().hasOwnProperty('onViewportChange')) {
+    // OctoPrint's bundled renderer is already new enough.  No need to replace.
+    return;
+  }
+  
   console.log("replacing GCODE renderer");
   var origRenderer = GCODE.renderer;
 
-  /**
-   * User: hudbrog (hudbrog@gmail.com)
-   * Date: 10/20/12
-   * Time: 1:36 PM
-   * To change this template use File | Settings | File Templates.
-   */
-  GCODE.renderer = (function(){
+//=== BEGIN COPY ===
+/**
+ * User: hudbrog (hudbrog@gmail.com)
+ * Date: 10/20/12
+ * Time: 1:36 PM
+ * To change this template use File | Settings | File Templates.
+ */
+
+
+GCODE.renderer = (function(){
 // ***** PRIVATE ******
     var canvas;
     var ctx;
@@ -44,18 +52,21 @@ var fn = function() {
         colorMove: "#00ff00",
         colorRetract: "#ff0000",
         colorRestart: "#0000ff",
+        colorHead: "#00ff00",
 
         showMoves: true,
         showRetracts: true,
         extrusionWidth: 1 * pixelRatio,
         // #000000", "#45c7ba",  "#a9533a", "#ff44cc", "#dd1177", "#eeee22", "#ffbb55", "#ff5511", "#777788"
         sizeRetractSpot: 2 * pixelRatio,
+        sizeHeadSpot: 2 * pixelRatio,
         modelCenter: {x: 0, y: 0},
         differentiateColors: true,
         showNextLayer: false,
         showPreviousLayer: false,
         showBoundingBox: false,
         showFullSize: false,
+        showHead: false,
 
         moveModel: true,
         zoomInOnModel: false,
@@ -175,6 +186,7 @@ var fn = function() {
             return pt.matrixTransform(xform.inverse());
         }
     }
+
 
     var  startCanvas = function() {
         var jqueryCanvas = $(renderOptions["container"]);
@@ -472,6 +484,53 @@ var fn = function() {
         ctx.setLineDash([1, 0]);
     };
 
+    var drawTriangle = function(centerX, centerY, length, up) {
+        /*
+         *             (cx,cy)
+         *                *             ^
+         *               / \            |
+         *              /   \           |
+         *             /     \          |
+         *            / (x,y) \         | h
+         *           /         \        |
+         *          /           \       |
+         *         /             \      |
+         *        *---------------*     v
+         *    (ax,ay)           (bx,by)
+         */
+
+        var ax, bx, cx, ay, by, cy;
+        var h = Math.sqrt(0.75 * length * length) / 2;
+
+        ax = centerX - length / 2;
+        bx = ax + length;
+        cx = centerX;
+
+        if (up) {
+            ay = centerY - h;
+            by = centerY - h;
+            cy = centerY + h;
+        } else {
+            ay = centerY + h;
+            by = centerY + h;
+            cy = centerY - h;
+        }
+
+        var origLineJoin = ctx.lineJoin;
+        ctx.lineJoin = "miter";
+
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.moveTo(bx, by);
+        ctx.lineTo(cx, cy);
+        ctx.lineTo(ax, ay);
+        ctx.stroke();
+        ctx.fill();
+
+        ctx.lineJoin = origLineJoin;
+    };
+
     var drawLayer = function(layerNum, fromProgress, toProgress, isNotCurrentLayer){
         log.trace("Drawing layer " + layerNum + " from " + fromProgress + " to " + toProgress + " (current: " + !isNotCurrentLayer + ")");
 
@@ -522,7 +581,7 @@ var fn = function() {
 
         //~~ render this layer's commands
 
-        var sizeRetractSpot = renderOptions["sizeRetractSpot"] * lineWidthFactor + lineWidthFactor / 2;
+        var sizeRetractSpot = renderOptions["sizeRetractSpot"] * lineWidthFactor * 2;
 
         // alpha value (100% if current layer is being rendered, 30% otherwise)
         var alpha = (renderOptions['showNextLayer'] || renderOptions['showPreviousLayer']) && isNotCurrentLayer ? 0.3 : 1.0;
@@ -622,8 +681,8 @@ var fn = function() {
                     if (renderOptions["showRetracts"]) {
                         strokePathIfNeeded("fill");
                         ctx.fillStyle = getColorRetractForTool(tool);
-                        ctx.arc(prevX, prevY, sizeRetractSpot, 0, Math.PI*2, true);
-                        ctx.fill();
+                        ctx.strokeStyle = ctx.fillStyle;
+                        drawTriangle(prevX, prevY, sizeRetractSpot, true);
                     }
                 }
 
@@ -637,7 +696,6 @@ var fn = function() {
                 if (cmd.retract == 0) {
                     // no retraction => real extrusion move, use tool color to draw line
                     strokePathIfNeeded("extrude", getColorLineForTool(tool));
-
                     ctx.lineWidth = renderOptions['extrusionWidth'] * lineWidthFactor;
                     if (cmd.direction !== undefined && cmd.direction != 0){
                         var di = cmd.i;
@@ -656,8 +714,8 @@ var fn = function() {
                     if (renderOptions["showRetracts"]) {
                         strokePathIfNeeded("fill");
                         ctx.fillStyle = getColorRestartForTool(tool);
-                        ctx.arc(prevX, prevY, sizeRetractSpot, 0, Math.PI*2, true);
-                        ctx.fill();
+                        ctx.strokeStyle = ctx.fillStyle;
+                        drawTriangle(prevX, prevY, sizeRetractSpot, false);
                     }
                 }
             }
@@ -669,6 +727,15 @@ var fn = function() {
         
         if (prevPathType != "fill") {
             ctx.stroke();
+        }
+
+        if (renderOptions["showHead"]) {
+            var sizeHeadSpot = renderOptions["sizeHeadSpot"] * lineWidthFactor + lineWidthFactor / 2;
+            var shade = tool * 0.15;
+            ctx.fillStyle = pusher.color(renderOptions["colorHead"]).shade(shade).alpha(alpha).html();
+            ctx.beginPath();
+            ctx.arc(prevX, prevY, sizeHeadSpot, 0, Math.PI*2, true);
+            ctx.fill();
         }
     };
 
@@ -770,7 +837,6 @@ var fn = function() {
 
 // ***** PUBLIC *******
     return {
-        hijacked_by_exclude_region: true,
         init: function(){
             startCanvas();
             initialized = true;
@@ -905,9 +971,11 @@ var fn = function() {
             return '-1';
         }
 
-  }
-  }());
+}
+}());
+//=== END COPY ===
 
+  GCODE.renderer.hijacked_by_exclude_region = true;
   GCODE.renderer.setOption(origRenderer.getOptions());
 }
 window.setTimeout(fn, 10);
