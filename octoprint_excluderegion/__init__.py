@@ -14,9 +14,6 @@
 # TODO: Add support for multiple extruders? (gcode cmd: "T#" - selects tool #)  Each tool should have its own extruder position/axis.  What about the other axes?
 
 
-# TODO: If not printing, don't bother filtering the gcode.
-
-
 from __future__ import absolute_import
 
 import octoprint.plugin
@@ -328,6 +325,12 @@ class ExcludeRegionPlugin(
   octoprint.plugin.EventHandlerPlugin
 ):
   def __init__(self):
+    self.excluded_regions = []         # The set of excluded regions
+    self.g90InfluencesExtruder = False # Will be reset later, based on configured OctoPrint setting
+    self.activePrintJob = False        # Whether printing or not
+    self.resetInternalPrintState()
+
+  def resetInternalPrintState(self):
     # Current axiz position, home offsets (M206), offsets (G92) and absolute or relative mode
     self.position = [
       AxisPosition(), # X_AXIS
@@ -337,21 +340,10 @@ class ExcludeRegionPlugin(
     ]
     self.feedRate = 0                 # Current feed rate
     self.feedRate_unitMultiplier = 1  # Unit multiplier to apply to feed rate
-
-    self.excluded_regions = []        # The set of exclude regions
-
-    self.g90InfluencesExtruder = False # Will be reset later, based on configured OctoPrint setting
-
-    # Values to use for the next allowed (non-excluded) printing move
-    self.excluding = False            # Whether currently in an exclude area or not
-
+    self.excluding = False            # Whether currently in an excluded area or not
     self.lastRetraction = None        # Retraction that may need to be recovered
-
-    # Stored values from M204 in excluded region
-    self.savedM204args = dict()
-
-    # Stored values from M205 in excluded region
-    self.savedM205args = dict()
+    self.savedM204args = dict()       # Stored values from M204 in excluded region
+    self.savedM205args = dict()       # Stored values from M205 in excluded region
 
   def on_after_startup(self):
     self.handle_settings_updated()
@@ -379,7 +371,7 @@ class ExcludeRegionPlugin(
     )
 
   def isActivePrintJob(self):
-    return self._printer.is_printing() or self._printer.is_paused() or self._printer.is_pausing()
+    return self.activePrintJob
 
   # Defines POST command endpoints under: /api/plugin/<plugin identifier>/
   def get_api_commands(self):
@@ -428,6 +420,19 @@ class ExcludeRegionPlugin(
       self.notifyExcludedRegionsChanged()
     elif (event == Events.SETTINGS_UPDATED):
       self.handle_settings_updated()
+    elif (event == Events.PRINT_STARTED):
+      self._logger.info("Printing started")
+      self.resetInternalPrintState()
+      self.activePrintJob = True
+    elif (
+      (event == Events.PRINT_DONE)
+      or (event == Events.PRINT_FAILED)
+      or (event == Events.PRINT_CANCELLING)
+      or (event == Events.PRINT_CANCELLED)
+      or (event == Events.ERROR)
+    ):
+      self._logger.info("Printing stopped")
+      self.activePrintJob = False
 
   def handle_settings_updated(self):
     self.g90InfluencesExtruder = settings().getBoolean(["feature", "g90InfluencesExtruder"])
@@ -439,11 +444,11 @@ class ExcludeRegionPlugin(
 
     if (self._logger.isEnabledFor(logging.DEBUG)):
       self._logger.debug(
-        "handle_gcode_queuing: phase=%s, cmd=%s, cmd_type=%s, gcode=%s, subcode=%s, tags=%s, args=%s, kwargs=%s",
-        phase, cmd, cmd_type, gcode, subcode, tags, args, kwargs
+        "handle_gcode_queuing: phase=%s, cmd=%s, cmd_type=%s, gcode=%s, subcode=%s, tags=%s, args=%s, kwargs=%s (isActivePrintJob=%s)",
+        phase, cmd, cmd_type, gcode, subcode, tags, args, kwargs, self.activePrintJob
       )
 
-    if (gcode):
+    if (gcode and self.isActivePrintJob()):
       method = getattr(self, "handle_"+ gcode, self.handle_other_gcode)
       return method(comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs)
 
@@ -957,7 +962,7 @@ class ExcludeRegionPlugin(
 
       return IGNORE_GCODE_CMD
 
-  # M205 - Set Advanced Settings
+  #M205 - Set Advanced Settings
   # M205 [B<µs>] [E<jerk>] [S<feedrate>] [T<feedrate>] [X<jerk>] [Y<jerk>] [Z<jerk>]
   def handle_M205(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
     if (self.excluding):
