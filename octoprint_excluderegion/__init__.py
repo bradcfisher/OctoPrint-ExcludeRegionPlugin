@@ -434,7 +434,8 @@ class ExcludeRegionPlugin(
     self._logger.info("Setting update detected: g90InfluencesExtruder=%s", self.g90InfluencesExtruder)
 
   def handle_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, subcode=None, tags=None, *args, **kwargs):
-    gcode = gcode.upper()
+    if (gcode):
+      gcode = gcode.upper()
 
     if (self._logger.isEnabledFor(logging.DEBUG)):
       self._logger.debug(
