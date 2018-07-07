@@ -14,6 +14,9 @@
 # TODO: Add support for multiple extruders? (gcode cmd: "T#" - selects tool #)  Each tool should have its own extruder position/axis.  What about the other axes?
 
 
+# TODO: If not printing, don't bother filtering the gcode.
+
+
 from __future__ import absolute_import
 
 import octoprint.plugin
@@ -610,7 +613,8 @@ class ExcludeRegionPlugin(
     return returnCommands
 
   def processLinearMoves(self, cmd, e, feedRate, finalZ, *xyPairs):
-    feedRate *= self.feedRate_unitMultiplier
+    if (feedRate != None):
+      feedRate *= self.feedRate_unitMultiplier
 
     eAxis = self.position[E_AXIS]
     priorE = eAxis.current
@@ -638,7 +642,7 @@ class ExcludeRegionPlugin(
     returnCommands = None
 
     self._logger.debug(
-      "processLinearMoves: cmd=%s, e=%s, priorE=%s, deltaE=%s, feedRate=%s, isMove=%s, finalZ=%s, xyPairs=%s, excluding=%s, lastRetraction=%s",
+      "processLinearMoves: cmd=%s, isMove=%s, e=%s, priorE=%s, deltaE=%s, feedRate=%s, finalZ=%s, xyPairs=%s, excluding=%s, lastRetraction=%s",
       cmd, isMove, e, priorE, deltaE, feedRate, finalZ, xyPairs,
       self.excluding, self.lastRetraction
     );
@@ -650,6 +654,8 @@ class ExcludeRegionPlugin(
         )
       elif (deltaE > 0): # recovery
         returnCommands = self.recoverRetractionIfNeeded(returnCommands, cmd, False)
+      elif (not self.excluding): # something else (no move, no extrude, probably just setting feedrate)
+        returnCommands = [ cmd ]
     elif (self.isAnyPointExcluded(*xyPairs)):
       if (not self.excluding):
         self._logger.info("processLinearMoves: START excluding: cmd=%s", cmd)
