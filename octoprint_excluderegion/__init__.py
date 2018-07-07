@@ -160,30 +160,30 @@ class CircularRegion:
 
 # State information associated with an axis (X, Y, Z, E)
 class AxisPosition:
-  def __init__(self, current = None, home_offset = 0, offset = 0, absolute_mode = True, unit_multiplier = 1):
+  def __init__(self, current = None, homeOffset = 0, offset = 0, absoluteMode = True, unitMultiplier = 1):
     # Current value and offsets are stored internally in mm
-    self.current = current    # "native" position relative to the home_offset + offset
-    self.home_offset = home_offset
+    self.current = current    # "native" position relative to the homeOffset + offset
+    self.homeOffset = homeOffset
     self.offset = offset
-    self.absolute_mode = absolute_mode
+    self.absoluteMode = absoluteMode
     # Conversion factor from logical units (e.g. inches) to mm
-    self.unit_multiplier = unit_multiplier
+    self.unitMultiplier = unitMultiplier
 
   def toDict(self):
     return {
       'type': self.__class__.__name__,
       'current': self.current,
-      'home_offset': self.home_offset,
+      'homeOffset': self.homeOffset,
       'offset': self.offset,
-      'absolute_mode': self.absolute_mode,
-      'unit_multiplier': self.unit_multiplier
+      'absoluteMode': self.absoluteMode,
+      'unitMultiplier': self.unitMultiplier
     }
 
   def __repr__(self):
     return json.dumps(self.toDict())
 
   def setAbsoluteMode(self, absoluteMode = True):
-    self.absolute_mode = absoluteMode
+    self.absoluteMode = absoluteMode
 
   # Updates the offset to the delta between the current position and the specified logical position
   def setLogicalOffsetPosition(self, position):
@@ -192,9 +192,9 @@ class AxisPosition:
 
   # Sets the home offset (M206)
   def setHomeOffset(self, homeOffset):
-    self.current += self.home_offset
-    self.home_offset = homeOffset * unitMultiplier
-    self.current -= self.home_offset
+    self.current += self.homeOffset
+    self.homeOffset = homeOffset * self.unitMultiplier
+    self.current -= self.homeOffset
 
   # Resets the axis to the home position
   def setHome(self):
@@ -203,7 +203,7 @@ class AxisPosition:
 
   # Sets the conversion factor from logical units (inches, etc) to mm
   def setUnitMultiplier(self, unitMultiplier):
-    self.unit_multiplier = unitMultiplier
+    self.unitMultiplier = unitMultiplier
 
   # Sets the position given a location in logical units.
   # Returns the new value of the 'current' property.
@@ -219,13 +219,13 @@ class AxisPosition:
     if (value == None):
       return self.current;
 
-    value *= self.unit_multiplier
+    value *= self.unitMultiplier
 
     if (absoluteMode == None):
-      absoluteMode = self.absolute_mode
+      absoluteMode = self.absoluteMode
 
     if (absoluteMode):
-      value += self.offset + self.home_offset
+      value += self.offset + self.homeOffset
     else:
       value += self.current
 
@@ -238,14 +238,14 @@ class AxisPosition:
       value = self.current
 
     if (absoluteMode == None):
-      absoluteMode = self.absolute_mode
+      absoluteMode = self.absoluteMode
     
     if (absoluteMode):
-      value -= self.offset + self.home_offset
+      value -= self.offset + self.homeOffset
     else:
       value -= self.current
 
-    return value / self.unit_multiplier
+    return value / self.unitMultiplier
 
 
 # Information for a retraction that may need to be restored later
@@ -309,13 +309,8 @@ class RetractionState:
       returnCommands.append(
         "G1 F{f} E{e}".format(
           e=eAxis.nativeToLogical(),
-          f=self.feedRate / excludeRegionPlugin.feedRate_unit_multiplier
+          f=self.feedRate / eAxis.unitMultiplier
         )
-      )
-
-      # Ensure final feed rate is correct
-      returnCommands.append(
-        "G0 F{f}".format(f=excludeRegionPlugin.feedRate / excludeRegionPlugin.feedRate_unit_multiplier)
       )
 
     return returnCommands
@@ -336,7 +331,7 @@ class ExcludeRegionPlugin(
       AxisPosition(0) # E_AXIS
     ]
     self.feedRate = 0                 # Current feed rate
-    self.feedRate_unit_multiplier = 1 # Unit multiplier to apply to feed rate
+    self.feedRate_unitMultiplier = 1  # Unit multiplier to apply to feed rate
 
     self.excluded_regions = []        # The set of exclude regions
 
@@ -600,8 +595,7 @@ class ExcludeRegionPlugin(
     return returnCommands
 
   def processLinearMoves(self, cmd, e, feedRate, finalZ, *xyPairs):
-    if (feedRate != None):
-      self.feedRate = feedRate * self.feedRate_unit_multiplier
+    feedRate *= self.feedRate_unitMultiplier
 
     eAxis = self.position[E_AXIS]
     priorE = eAxis.current
@@ -623,6 +617,9 @@ class ExcludeRegionPlugin(
           isMove = True
           break
 
+    if (isMove and (feedRate != None)):
+      self.feedRate = feedRate
+
     returnCommands = None
 
     self._logger.debug(
@@ -634,7 +631,7 @@ class ExcludeRegionPlugin(
     if (not isMove):
       if (deltaE < 0):   # retraction, record the amount to potentially recover later
         returnCommands = self.recordRetraction(
-          RetractionState(e = -deltaE, feedRate = self.feedRate), returnCommands
+          RetractionState(e = -deltaE, feedRate = feedRate), returnCommands
         )
       elif (deltaE > 0): # recovery
         returnCommands = self.recoverRetractionIfNeeded(returnCommands, cmd, False)
@@ -665,13 +662,15 @@ class ExcludeRegionPlugin(
       returnCommands.append(
         # Move Z axis to new position (hopefully help avoid hitting any part we pass might over)
         "G0 F{f} Z{z}".format(
-          f=self.feedRate / self.feedRate_unit_multiplier,
+          f=self.feedRate / self.feedRate_unitMultiplier,
           z=self.position[Z_AXIS].nativeToLogical()
         )
       )
+
       returnCommands.append(
         # Move X/Y axes to new position
-        "G0 X{x} Y{x}".format(
+        "G0 F{x} X{x} Y{x}".format(
+          f=self.feedRate / self.feedRate_unitMultiplier,
           x=self.position[X_AXIS].nativeToLogical(),
           y=self.position[Y_AXIS].nativeToLogical()
         )
@@ -794,7 +793,7 @@ class ExcludeRegionPlugin(
         elif (label == "E"):
           e = self.position[E_AXIS].logicalToNative(value)
         elif (label == "F"):
-          f = value * self.feedRate_unit_multiplier
+          f = value
         elif (label == "R"):
           r = value
         if (label == "I"):
@@ -855,10 +854,10 @@ class ExcludeRegionPlugin(
     else:
       return returnCommands
 
-  def setUnitMultiplier(self, unit_multiplier):
-    self.feedRate_unit_multiplier = unit_multiplier
+  def setUnitMultiplier(self, unitMultiplier):
+    self.feedRate_unitMultiplier = unitMultiplier;
     for axis in self.position:
-      axis.setUnitMultiplier(unit_multiplier)
+      axis.setUnitMultiplier(unitMultiplier)
 
   #G20 - Set units to inches
   def handle_G20(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
