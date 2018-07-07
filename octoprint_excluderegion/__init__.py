@@ -250,7 +250,7 @@ class AxisPosition:
 
 # Information for a retraction that may need to be restored later
 class RetractionState:
-  def __init__(self, firmwareRetract=None, e=None, feedRate=None):
+  def __init__(self, firmwareRetract=None, e=None, feedRate=None, originalCommand=None):
     non_firmwareRetract = (e != None) or (feedRate != None)
     if (firmwareRetract != None):
       if (non_firmwareRetract):
@@ -266,11 +266,13 @@ class RetractionState:
     self.firmwareRetract = firmwareRetract  # This was a firmware retraction (G10)
     self.e = e                    # Amount of filament to extrude when recovering a previous retraction
     self.feedRate = feedRate      # Feed rate for filament recovery
+    self.originalCommand = originalCommand  # Original retraction gcode
 
   def toDict(self):
     rv = {
       'type': self.__class__.__name__,
-      'recoverExcluded': self.recoverExcluded
+      'recoverExcluded': self.recoverExcluded,
+      'originalCommand': self.originalCommand
     }
     if (self.e == None):
       rv['firmwareRetract'] = self.firmwareRetract
@@ -532,10 +534,15 @@ class ExcludeRegionPlugin(
   def recordRetraction(self, retract, returnCommands):
     if (self.lastRetraction == None):
       self.lastRetraction = retract;
-      returnCommands = retract.addRetractCommands(self, returnCommands)
+
       if (self.excluding):
         # If this is the first retraction while excluding ensure the retraction actually occurs
         self._logger.info("Initial retraction encountered while excluding, allowing retraction to proceed: retract=%s", retract)
+        returnCommands = retract.addRetractCommands(self, returnCommands)
+      elif (returnCommands == None):
+        returnCommands = [ retract.originalCommand ]
+      else:
+        returnCommands.append(retract.originalCommand)
     elif (self.lastRetraction.recoverExcluded):
         # Ignore this retraction command and clear recovery flag
         # (prior recovery was excluded, so already retracted)
@@ -547,7 +554,12 @@ class ExcludeRegionPlugin(
       # It doesn't seem like this should occur in a well-formed file
       # Since it's not expected, log it and let it pass through
       self._logger.warn("Encountered multiple retractions without an intervening recovery (excluding=%s).  Allowing this retraction to proceed: %s", self.excluding, retract)
-      returnCommands = retract.addRetractCommands(self, returnCommands)
+      if (self.excluding):
+        returnCommands = retract.addRetractCommands(self, returnCommands)
+      elif (returnCommands == None):
+        returnCommands = [ retract.originalCommand ]
+      else:
+        returnCommands.append(retract.originalCommand)
 
     self._logger.info("retraction: excluding=%s, retract=%s, returnCommands=%s", self.excluding, retract, returnCommands)
 
@@ -587,7 +599,10 @@ class ExcludeRegionPlugin(
         # Since it's not generally expected, log it
         self._logger.warn("Encountered recovery without a corresponding retraction: %s", originalCmd)
 
-      returnCommands = [originalCmd]
+      if (returnCommands != None):
+        returnCommands.append(originalCmd);
+      else:
+        returnCommands = [ originalCmd ];
 
     if (fw_recovery != None):
       self._logger.info("recovery: excluding=%s, originalCmd=%s, returnCommands=%s", self.excluding, originalCmd, returnCommands)
@@ -631,7 +646,7 @@ class ExcludeRegionPlugin(
     if (not isMove):
       if (deltaE < 0):   # retraction, record the amount to potentially recover later
         returnCommands = self.recordRetraction(
-          RetractionState(e = -deltaE, feedRate = feedRate), returnCommands
+          RetractionState(e = -deltaE, feedRate = feedRate, originalCommand = cmd), returnCommands
         )
       elif (deltaE > 0): # recovery
         returnCommands = self.recoverRetractionIfNeeded(returnCommands, cmd, False)
@@ -840,7 +855,7 @@ class ExcludeRegionPlugin(
   #G10 - Retract
   def handle_G10(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
     self._logger.debug("handle_G10: firmware retraction")
-    returnCommands = self.recordRetraction(RetractionState(firmwareRetract = True))
+    returnCommands = self.recordRetraction(RetractionState(firmwareRetract = True, originalCommand = cmd))
     if (returnCommands == None):
       return IGNORE_GCODE_CMD
     else:
