@@ -690,7 +690,7 @@ class ExcludeRegionPlugin(
 
       returnCommands.append(
         # Move X/Y axes to new position
-        "G0 F{x} X{x} Y{x}".format(
+        "G0 F{f} X{x} Y{y}".format(
           f=self.feedRate / self.feedRate_unitMultiplier,
           x=self.position[X_AXIS].nativeToLogical(),
           y=self.position[Y_AXIS].nativeToLogical()
