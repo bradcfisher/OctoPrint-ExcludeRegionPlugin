@@ -43,5 +43,5 @@ or manually using this URL:
 
 ## Configuration
 
-There currently are no plugin-specific options, although it does utilize the values of the standard
+There currently are no plugin-specific options, although it does utilize the value of the standard
 `G90/G91 overrides relative extruder mode` feature.

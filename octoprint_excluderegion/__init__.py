@@ -12,6 +12,11 @@
 
 
 # TODO: Add support for multiple extruders? (gcode cmd: "T#" - selects tool #)  Each tool should have its own extruder position/axis.  What about the other axes?
+# Each tool has its own offsets and x axis position
+# From Marlin source (Marlin_main.cpp:11201):
+#   current_position[Y_AXIS] -= hotend_offset[Y_AXIS][active_extruder] - hotend_offset[Y_AXIS][tmp_extruder];
+#   current_position[Z_AXIS] -= hotend_offset[Z_AXIS][active_extruder] - hotend_offset[Z_AXIS][tmp_extruder];
+
 
 
 from __future__ import absolute_import
@@ -338,10 +343,13 @@ class ExcludeRegionPlugin(
       AxisPosition(), # Z_AXIS
       AxisPosition(0) # E_AXIS
     ]
+
     self.feedRate = 0                 # Current feed rate
     self.feedRate_unitMultiplier = 1  # Unit multiplier to apply to feed rate
     self.excluding = False            # Whether currently in an excluded area or not
     self.lastRetraction = None        # Retraction that may need to be recovered
+
+    # Cached values to reduce chatter with the printer while excluding
     self.savedM204args = dict()       # Stored values from M204 in excluded region
     self.savedM205args = dict()       # Stored values from M205 in excluded region
 
@@ -867,7 +875,7 @@ class ExcludeRegionPlugin(
   #G10 - Retract
   def handle_G10(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
     self._logger.debug("handle_G10: firmware retraction")
-    returnCommands = self.recordRetraction(RetractionState(firmwareRetract = True, originalCommand = cmd))
+    returnCommands = self.recordRetraction(RetractionState(firmwareRetract = True, originalCommand = cmd), None)
     if (returnCommands == None):
       return IGNORE_GCODE_CMD
     else:
@@ -875,7 +883,7 @@ class ExcludeRegionPlugin(
 
   #G11 - Recover (unretract)
   def handle_G11(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
-    returnCommands = self.recoverRetractionIfNeeded(self, cmd, True)
+    returnCommands = self.recoverRetractionIfNeeded(None, cmd, True)
     if (returnCommands == None):
       return IGNORE_GCODE_CMD
     else:
