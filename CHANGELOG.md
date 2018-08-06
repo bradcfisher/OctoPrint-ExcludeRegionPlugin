@@ -1,7 +1,9 @@
 
-## [0.1.2] - UNRELEASED
+## [0.1.2] - 2018-08-05
 
-
+### Fixed
+- Errors when G10/G11 commands were encountered
+  Resolves [#6](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/6)
 
 ## [0.1.1] - 2018-07-07
 
