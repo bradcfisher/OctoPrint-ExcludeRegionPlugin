@@ -1,0 +1,76 @@
+<h4>General Settings</h4>
+
+<form class="form-horizontal">
+  <div class="control-group" title="{{ _('Whether to clear any defined exclude regions by default when printing completes') }}">
+    <div class="controls">
+      <label class="checkbox">
+        <input type="checkbox" data-bind="checked: settings.clearRegionsAfterPrintFinishes">
+        {{ _('Clear Exclude Regions when Print Completes') }}
+      </label>
+    </div>
+  </div>
+
+  <div class="control-group" title="{{ _('Gcode to execute when entering an excluded region') }}">
+    <label class="control-label" for="settings-excluderegion-enterRegionGcode">{{ _('Enter Exclude Region Gcode') }}</label>
+      <div class="controls">
+        <input type="text" class="input-block-level" data-bind="value: settings.enteringExcludedRegionGcode" id="settings-excluderegion-enterRegionGcode">
+      </div>
+  </div>
+
+  <div class="control-group" title="{{ _('Gcode to execute when leaving an excluded region') }}">
+    <label class="control-label" for="settings-excluderegion-exitRegionGcode">{{ _('Exit Exclude Region Gcode') }}</label>
+    <div class="controls">
+      <input type="text" class="input-block-level" data-bind="value: settings.exitingExcludedRegionGcode" id="settings-excluderegion-exitRegionGcode">
+    </div>
+  </div>
+</form>
+
+<h4>Extended Gcodes to Exclude</h4>
+
+<table class="table table-condensed">
+  <thead>
+    <tr>
+      <th>{{ _('Gcode') }}</th>
+      <th>{{ _('Mode') }}</th>
+      <th></th>
+    </tr>
+  </thead>
+  <tbody data-bind="foreach: settings.extendedExcludeGcodes">
+    <tr data-bind="attr: {title: gcode}">
+      <td><span data-bind="text: gcode" /></td>
+      <td>
+        <select data-bind="value: mode" class="input-medium" title="{{ _('Exclude Mode') }}">
+          <option value="exclude">{{ _('Exclude') }}</option>
+          <option value="first">{{ _('First') }}</option>
+          <option value="last">{{ _('Last') }}</option>
+          <option value="merge">{{ _('Merge') }}</option>
+        </select>
+      </td>
+      <td style="text-align:center">
+        <div class="btn-group">
+          <a href="#" class="btn btn-mini icon-trash" data-bind="click: $parent.removeExtendedGcode"></a>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+  <tbody>
+    <tr>
+      <td><input type="text" class="input-block-level" title="{{ _("Gcode") }}" id="settings-excluderegion_newExtendedGcode"/></td>
+      <td>
+        <select class="input-medium" title="{{ _('Exclude Mode') }}" id="settings-excluderegion_newExtendedGcodeMode">
+          <option value="exclude">{{ _('Exclude') }}</option>
+          <option value="first">{{ _('First') }}</option>
+          <option value="last">{{ _('Last') }}</option>
+          <option value="merge">{{ _('Merge') }}</option>
+        </select>
+      </td>
+      <td style="text-align:center">
+        <div class="btn-group">
+<!-- TODO: Disable this button if the gcode value is blank or all spaces -->
+          <a href="#" class="btn btn-mini icon-plus" data-bind="click: addExtendedGcode"></a>
+        </div>
+      </td>
+    </tr>
+  </tbody>
+</table>
+

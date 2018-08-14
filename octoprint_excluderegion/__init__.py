@@ -10,6 +10,18 @@
 #     Could possibly add comments that could be used by the cancelobject plugin
 #   - If stored as metadata, make sure to compare file hash to ensure it's the same file data
 
+# - Add setting to configure default behavior for retaining/clearing excluded regions when a print completes
+#   - Also add checkbox to Gcode viewer UI
+# - Add a way to define custom Gcodes to ignore when excluding.  Could be 4 modes:
+#   1) Exclude completely (e.g. G4)
+#   2) First (only the first command encountered is executed when leaving excluded area)
+#   3) Last (only the last command encountered is executed when leaving excluded area)
+#   4) Merge (args of each command found are are merged, retaining last value for each arg) and execute one combined command when leaving excluded area (e.g. M204)
+# - Setting for GCode to execute when entering an excluded region
+# - Setting for GCode to execute when exiting an excluded region
+# - Setting to specify a Gcode to look for to indicate we've reached the end script and should no longer exclude moves?  Or comment pattern to search for?
+
+# TODO: Is a setting needed for control how big a retraction is recorded as one that needs to be recovered after exiting an excluded region (e.g. ignore small retractions like E-0.03)?  What could a reasonable limit be for the default?
 
 # TODO: Add support for multiple extruders? (gcode cmd: "T#" - selects tool #)  Each tool should have its own extruder position/axis.  What about the other axes?
 # Each tool has its own offsets and x axis position
@@ -52,6 +64,11 @@ E_AXIS = 3
 
 TWO_PI = 2 * math.pi
 IGNORE_GCODE_CMD = None,
+
+EXCLUDE_ALL = "exclude"
+EXCLUDE_EXCEPT_FIRST = "first"
+EXCLUDE_EXCEPT_LAST = "last"
+EXCLUDE_MERGE = "merge"
 
 def __plugin_load__():
   global __plugin_implementation__
@@ -166,13 +183,20 @@ class CircularRegion:
 # State information associated with an axis (X, Y, Z, E)
 class AxisPosition:
   def __init__(self, current = None, homeOffset = 0, offset = 0, absoluteMode = True, unitMultiplier = 1):
-    # Current value and offsets are stored internally in mm
-    self.current = current    # "native" position relative to the homeOffset + offset
-    self.homeOffset = homeOffset
-    self.offset = offset
-    self.absoluteMode = absoluteMode
-    # Conversion factor from logical units (e.g. inches) to mm
-    self.unitMultiplier = unitMultiplier
+    if (isinstance(current, AxisPosition)):
+      self.homeOffset = current.homeOffset
+      self.offset = current.offset
+      self.absoluteMode = current.absoluteMode
+      self.unitMultiplier = current.unitMultiplier
+      self.current = current.current
+    else:
+      # Current value and offsets are stored internally in mm
+      self.current = current    # "native" position relative to the homeOffset + offset
+      self.homeOffset = homeOffset
+      self.offset = offset
+      self.absoluteMode = absoluteMode
+      # Conversion factor from logical units (e.g. inches) to mm
+      self.unitMultiplier = unitMultiplier
 
   def toDict(self):
     return {
@@ -253,6 +277,39 @@ class AxisPosition:
     return value / self.unitMultiplier
 
 
+class Position:
+  def __init__(self, position=None):
+    if (isinstance(position, Position)):
+      self.X_AXIS = AxisPosition(position.X_AXIS)
+      self.Y_AXIS = AxisPosition(position.Y_AXIS)
+      self.Z_AXIS = AxisPosition(position.Z_AXIS)
+      self.E_AXIS = AxisPosition(position.E_AXIS)
+    else:
+      self.X_AXIS = AxisPosition()
+      self.Y_AXIS = AxisPosition()
+      self.Z_AXIS = AxisPosition()
+      self.E_AXIS = AxisPosition(0)
+
+    self._position = [ self.X_AXIS, self.Y_AXIS, self.Z_AXIS, self.E_AXIS ]
+
+  def __len__(self):
+    return 4
+
+  def __getitem__(self, key):
+    return self._position[key]
+
+  def toDict(self):
+    return {
+      'type': self.__class__.__name__,
+      'X_AXIS': self.X_AXIS,
+      'Y_AXIS': self.Y_AXIS,
+      'Z_AXIS': self.Z_AXIS,
+      'E_AXIS': self.E_AXIS
+    }
+
+  def __repr__(self):
+    return json.dumps(self.toDict())
+
 # Information for a retraction that may need to be restored later
 class RetractionState:
   def __init__(self, firmwareRetract=None, e=None, feedRate=None, originalCommand=None):
@@ -327,31 +384,34 @@ class ExcludeRegionPlugin(
   octoprint.plugin.StartupPlugin,
   octoprint.plugin.AssetPlugin,
   octoprint.plugin.SimpleApiPlugin,
-  octoprint.plugin.EventHandlerPlugin
+  octoprint.plugin.EventHandlerPlugin,
+  octoprint.plugin.SettingsPlugin,
+  octoprint.plugin.TemplatePlugin
 ):
   def __init__(self):
-    self.excluded_regions = []         # The set of excluded regions
     self.g90InfluencesExtruder = False # Will be reset later, based on configured OctoPrint setting
+    self.clearRegionsAfterPrintFinishes = False
+    self.extendedExcludeGcodes = {}
+    self.enteringExcludedRegionGcode = None # GCode to execute when entering an excluded region
+    self.exitingExcludedRegionGcode = None  # GCode to execute when leaving an excluded region
     self.activePrintJob = False        # Whether printing or not
-    self.resetInternalPrintState()
+    self.resetInternalPrintState(True)
 
-  def resetInternalPrintState(self):
-    # Current axiz position, home offsets (M206), offsets (G92) and absolute or relative mode
-    self.position = [
-      AxisPosition(), # X_AXIS
-      AxisPosition(), # Y_AXIS
-      AxisPosition(), # Z_AXIS
-      AxisPosition(0) # E_AXIS
-    ]
+  def resetInternalPrintState(self, clearExcludedRegions = False):
+    if (clearExcludedRegions):
+        self.excluded_regions = []    # The set of excluded regions
+
+    # Current axis position, home offsets (M206), offsets (G92) and absolute or relative mode
+    self.position = Position()
 
     self.feedRate = 0                 # Current feed rate
     self.feedRate_unitMultiplier = 1  # Unit multiplier to apply to feed rate
     self.excluding = False            # Whether currently in an excluded area or not
     self.lastRetraction = None        # Retraction that may need to be recovered
+    self.lastPosition = None          # Last position before entering an excluded area
 
-    # Cached values to reduce chatter with the printer while excluding
-    self.savedM204args = dict()       # Stored values from M204 in excluded region
-    self.savedM205args = dict()       # Stored values from M205 in excluded region
+    # Storage for pending commands to execute when exiting an excluded area
+    self.pendingCommands = {}
 
   def on_after_startup(self):
     self.handle_settings_updated()
@@ -362,6 +422,11 @@ class ExcludeRegionPlugin(
       js=["js/renderer.js", "js/excluderegion.js"],
       css=["css/excluderegion.css"]
     )
+
+  def get_template_configs(self):
+    return [
+      dict(type="settings", custom_bindings=True)
+    ]
 
   def get_update_information(self):
     return dict(
@@ -377,6 +442,25 @@ class ExcludeRegionPlugin(
         pip="https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/archive/{target_version}.zip"
       )
     )
+
+  def get_settings_defaults(self):
+    return dict(
+      clearRegionsAfterPrintFinishes = False,
+      enteringExcludedRegionGcode = None,
+      exitingExcludedRegionGcode = None,
+      extendedExcludeGcodes = [
+        {"gcode":"G4", "mode":EXCLUDE_ALL},
+        {"gcode":"M204", "mode":EXCLUDE_MERGE},
+        {"gcode":"M205", "mode":EXCLUDE_MERGE}
+      ]
+    )
+
+  def get_settings_version(self):
+    return 1
+
+  def on_settings_migrate(self, target, current):
+    # TODO: Migrate settings from current (old) version to target (new) version
+    return
 
   def isActivePrintJob(self):
     return self.activePrintJob
@@ -424,7 +508,7 @@ class ExcludeRegionPlugin(
     self._logger.info("Event received: event=%s payload=%s", event, payload)
     if (event == Events.FILE_SELECTED):
       self._logger.info("File selected, resetting internal state")
-      self.__init__()
+      self.resetInternalPrintState(True)
       self.notifyExcludedRegionsChanged()
     elif (event == Events.SETTINGS_UPDATED):
       self.handle_settings_updated()
@@ -441,10 +525,27 @@ class ExcludeRegionPlugin(
     ):
       self._logger.info("Printing stopped")
       self.activePrintJob = False
+      if (self.clearRegionsAfterPrintFinishes):
+        self.resetInternalPrintState(True)
+        self.notifyExcludedRegionsChanged()
 
   def handle_settings_updated(self):
     self.g90InfluencesExtruder = settings().getBoolean(["feature", "g90InfluencesExtruder"])
-    self._logger.info("Setting update detected: g90InfluencesExtruder=%s", self.g90InfluencesExtruder)
+    self.clearRegionsAfterPrintFinishes = self._settings.getBoolean(["clearRegionsAfterPrintFinishes"])
+    self.enteringExcludedRegionGcode = self._settings.get(["enteringExcludedRegionGcode"])
+    self.exitingExcludedRegionGcode = self._settings.get(["exitingExcludedRegionGcode"])
+
+    self.extendedExcludeGcodes = {}
+    for val in self._settings.get(["extendedExcludeGcodes"]):
+      self._logger.info("copy extended gcode entry: %s", val)
+      self.extendedExcludeGcodes[val.get("gcode")] = val
+
+    self._logger.info(
+      "Setting update detected: g90InfluencesExtruder=%s, clearRegionsAfterPrintFinishes=%s, enteringExcludedRegionGcode=%s, exitingExcludedRegionGcode=%s, extendedExcludeGcodes=%s",
+      self.g90InfluencesExtruder, self.clearRegionsAfterPrintFinishes,
+      self.enteringExcludedRegionGcode, self.exitingExcludedRegionGcode,
+      self.extendedExcludeGcodes
+    )
 
   def handle_gcode_queuing(self, comm_instance, phase, cmd, cmd_type, gcode, subcode=None, tags=None, *args, **kwargs):
     if (gcode):
@@ -452,8 +553,8 @@ class ExcludeRegionPlugin(
 
     if (self._logger.isEnabledFor(logging.DEBUG)):
       self._logger.debug(
-        "handle_gcode_queuing: phase=%s, cmd=%s, cmd_type=%s, gcode=%s, subcode=%s, tags=%s, args=%s, kwargs=%s (isActivePrintJob=%s)",
-        phase, cmd, cmd_type, gcode, subcode, tags, args, kwargs, self.activePrintJob
+        "handle_gcode_queuing: phase=%s, cmd=%s, cmd_type=%s, gcode=%s, subcode=%s, tags=%s, args=%s, kwargs=%s (isActivePrintJob=%s, excluding=%s)",
+        phase, cmd, cmd_type, gcode, subcode, tags, args, kwargs, self.activePrintJob, self.excluding
       )
 
     if (gcode and self.isActivePrintJob()):
@@ -461,7 +562,36 @@ class ExcludeRegionPlugin(
       return method(comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs)
 
   def handle_other_gcode(self, comm_instance, phase, cmd, cmd_type, gcode, subcode=None, tags=None, *args, **kwargs):
-    # Currently nothing to do here
+    if (self._logger.isEnabledFor(logging.DEBUG)):
+      self._logger.debug(
+        "handle_other_gcode: phase=%s, cmd=%s, cmd_type=%s, gcode=%s, subcode=%s, tags=%s, args=%s, kwargs=%s (isActivePrintJob=%s, excluding=%s, extendedExcludeGcodes=%s)",
+        phase, cmd, cmd_type, gcode, subcode, tags, args, kwargs, self.activePrintJob, self.excluding, self.extendedExcludeGcodes
+      )
+
+    if (gcode and self.excluding):
+      mode = self.extendedExcludeGcodes.get(gcode).get("mode")
+      if (mode != None):
+        self._logger.debug("handle_other_gcode: gcode excluded by extended configuration: mode=%s, cmd=%s", mode, cmd)
+
+        if (mode == EXCLUDE_MERGE):
+          pendingArgs = self.pendingCommands.get(gcode)
+          if (pendingArgs == None):
+            pendingArgs = {}
+            self.pendingCommands[gcode] = pendingArgs
+
+          cmd_args = regex_split.split(cmd)
+          for index in range(1, len(cmd_args)):
+            arg = cmd_args[index]
+            pendingArgs[arg[0].upper()] = arg[1:]
+        elif (mode == EXCLUDE_EXCEPT_FIRST):
+          if (not (gcode in self.pendingCommands)):
+            self.pendingCommands[gcode] = cmd
+        elif (mode == EXCLUDE_EXCEPT_LAST):
+          self.pendingCommands[gcode] = cmd
+
+        return IGNORE_GCODE_CMD
+
+    # Otherwise, let the command process normally
     return
 
   def getRegion(self, id):
@@ -570,7 +700,7 @@ class ExcludeRegionPlugin(
       # This is an additonal retraction that hasn't had it's recovery excluded
       # It doesn't seem like this should occur in a well-formed file
       # Since it's not expected, log it and let it pass through
-      self._logger.warn("Encountered multiple retractions without an intervening recovery (excluding=%s).  Allowing this retraction to proceed: %s", self.excluding, retract)
+      self._logger.debug("Encountered multiple retractions without an intervening recovery (excluding=%s).  Allowing this retraction to proceed: %s", self.excluding, retract)
       if (self.excluding):
         returnCommands = retract.addRetractCommands(self, returnCommands)
       elif (returnCommands == None):
@@ -578,7 +708,7 @@ class ExcludeRegionPlugin(
       else:
         returnCommands.append(retract.originalCommand)
 
-    self._logger.info("retraction: excluding=%s, retract=%s, returnCommands=%s", self.excluding, retract, returnCommands)
+    self._logger.debug("retraction: excluding=%s, retract=%s, returnCommands=%s", self.excluding, retract, returnCommands)
 
     return returnCommands
     
@@ -591,7 +721,7 @@ class ExcludeRegionPlugin(
         lastRetraction = self.lastRetraction
         if (lastRetraction.recoverExcluded):
           # Recover from the previous retraction
-          self._logger.warn("Executing pending recovery for previous retraction: %s", lastRetraction)
+          self._logger.info("Executing pending recovery for previous retraction: %s", lastRetraction)
           returnCommands = lastRetraction.addRecoverCommands(self, returnCommands)
 
         self.lastRetraction = None
@@ -602,7 +732,7 @@ class ExcludeRegionPlugin(
             # The command is a recovery, but we just recovered from a previous retraction.
             # That should indicate multiple recoveries without an intervening retraction
             # That isn't really an expected case, so log it
-            self._logger.warn("Recovery encountered immediately following a pending recovery action: originalCmd=%s, lastRetraction=%s", originalCmd, lastRetraction)
+            self._logger.info("Recovery encountered immediately following a pending recovery action: originalCmd=%s, lastRetraction=%s", originalCmd, lastRetraction)
 
           if (returnCommands != None):
             returnCommands.append(originalCmd);
@@ -614,7 +744,7 @@ class ExcludeRegionPlugin(
         # It doesn't seem like this should occur (often) in a well-formed file.
         # Cura generates one at the start of the file, but doesn't seem to after that point.
         # Since it's not generally expected, log it
-        self._logger.warn("Encountered recovery without a corresponding retraction: %s", originalCmd)
+        self._logger.debug("Encountered recovery without a corresponding retraction: %s", originalCmd)
 
       if (returnCommands != None):
         returnCommands.append(originalCmd);
@@ -622,7 +752,7 @@ class ExcludeRegionPlugin(
         returnCommands = [ originalCmd ];
 
     if (fw_recovery != None):
-      self._logger.info("recovery: excluding=%s, originalCmd=%s, returnCommands=%s", self.excluding, originalCmd, returnCommands)
+      self._logger.debug("recovery: excluding=%s, originalCmd=%s, returnCommands=%s", self.excluding, originalCmd, returnCommands)
 
     return returnCommands
 
@@ -674,6 +804,10 @@ class ExcludeRegionPlugin(
       if (not self.excluding):
         self._logger.info("processLinearMoves: START excluding: cmd=%s", cmd)
       self.excluding = True
+      self.lastPosition = Position(self.position)
+
+      if (self.enteringExcludedRegionGcode != None):
+        returnCommands = [ self.enteringExcludedRegionGcode ]
     elif (self.excluding):
       self.excluding = False
 
@@ -681,26 +815,32 @@ class ExcludeRegionPlugin(
       if (returnCommands == None):
         returnCommands = []
 
-      if (len(self.savedM204args) > 0):
-        returnCommands.append(self.buildCommand("M204", **self.savedM204args))
-        self.savedM204args = dict()
+      if (self.exitingExcludedRegionGcode != None):
+        returnCommands.append(self.exitingExcludedRegionGcode)
 
-      if (len(self.savedM205args) > 0):
-        returnCommands.append(self.buildCommand("M205", **self.savedM205args))
-        self.savedM205args = dict()
+      if (len(self.pendingCommands)):
+        for gcode, cmdArgs in self.pendingCommands.iteritems():
+          if (isinstance(cmdArgs, dict)):
+            returnCommands.append(self.buildCommand(gcode, **cmdArgs))
+          else:
+            returnCommands.append(cmdArgs)
+        self.pendingCommands = {}
 
       returnCommands.append(
         # Set logical extruder position
         "G92 E{e}".format(e=eAxis.nativeToLogical())
       )
 
-      returnCommands.append(
-        # Move Z axis to new position (hopefully help avoid hitting any part we pass might over)
-        "G0 F{f} Z{z}".format(
-          f=self.feedRate / self.feedRate_unitMultiplier,
-          z=self.position[Z_AXIS].nativeToLogical()
-        )
+      newZ = self.position[Z_AXIS].nativeToLogical()
+      oldZ = self.lastPosition[Z_AXIS].nativeToLogical()
+      moveZcmd = "G0 F{f} Z{z}".format(
+        f=self.feedRate / self.feedRate_unitMultiplier,
+        z=newZ
       )
+
+      if (newZ > oldZ):
+        # Move Z axis _up_ to new position (hopefully help avoid hitting any part we may pass over)
+        returnCommands.append(moveZcmd)
 
       returnCommands.append(
         # Move X/Y axes to new position
@@ -711,9 +851,14 @@ class ExcludeRegionPlugin(
         )
       )
 
+      if (newZ < oldZ):
+        # Move Z axis _down_ to new position (hopefully we avoided hitting any part we may pass over)
+        returnCommands.append(moveZcmd)
+
       self._logger.info("processLinearMoves: STOP excluding: cmd=%s, returnCommands=%s", cmd, returnCommands)
     else:
       if (deltaE > 0):
+        # Recover any retraction recorded from the excluded region before the next extrusion occurs
         returnCommands = self.recoverRetractionIfNeeded(returnCommands, cmd)
       else:
         returnCommands = [ cmd ]
@@ -958,28 +1103,6 @@ class ExcludeRegionPlugin(
           self.position[Y_AXIS].setLogicalOffsetPosition(value)
         elif (label == "Z"):
           self.position[Z_AXIS].setLogicalOffsetPosition(value)
-
-  #M204 - Set Starting Acceleration
-  # M204 [P<accel>] [R<accel>] [T<accel>]
-  def handle_M204(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
-    if (self.excluding):
-      cmd_args = regex_split.split(cmd)
-      for index in range(1, len(cmd_args)):
-        arg = cmd_args[index]
-        self.savedM204args[arg[0].upper()] = arg[1:]
-
-      return IGNORE_GCODE_CMD
-
-  #M205 - Set Advanced Settings
-  # M205 [B<µs>] [E<jerk>] [S<feedrate>] [T<feedrate>] [X<jerk>] [Y<jerk>] [Z<jerk>]
-  def handle_M205(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
-    if (self.excluding):
-      cmd_args = regex_split.split(cmd)
-      for index in range(1, len(cmd_args)):
-        arg = cmd_args[index]
-        self.savedM205args[arg[0].upper()] = arg[1:]
-
-      return IGNORE_GCODE_CMD
 
   #M206 - Set home offsets
   # M206 [P<offset>] [T<offset>] [X<offset>] [Y<offset>] [Z<offset>]

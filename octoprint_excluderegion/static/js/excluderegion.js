@@ -201,7 +201,7 @@ $(function() {
     self.gcodeViewModel = dependencies[0];
     self.loginState = dependencies[1];
     self.printerState = dependencies[2];
-    self.settings = dependencies[3];
+    self.global_settings = dependencies[3];
     self.touchui = dependencies[4];
 
     self.isFileSelected = ko.pureComputed(function() {
@@ -803,6 +803,52 @@ $(function() {
       retrieveExcludeRegions();
     }
 
+    self.onBeforeBinding = function() {
+      self.settings = self.global_settings.settings.plugins.excluderegion;
+      console.log("onBeforeBinding: settings=", self.settings);
+      self.onEventSettingsUpdated();
+    }
+
+    self.onEventSettingsUpdated = function() {
+      console.log("onEventSettingsUpdated: settings=", self.settings);
+
+// TODO: This sorting should either happen _before_ saving (would that need to be in the python code?)
+      self.extendedExcludeGcodes = self.settings.extendedExcludeGcodes.sort(
+        function(a, b) {
+          var uca = a.gcode().toLocaleUpperCase();
+          var ucb = b.gcode().toLocaleUpperCase();
+          if (uca < ucb)
+            return -1;
+          if (uca > ucb)
+            return 1;
+          return 0;
+        }
+      );
+    }
+
+    self.addExtendedGcode = function() {
+      console.log("addExtendedGcode: clicked: extendedExcludeGcodes=", self.settings.extendedExcludeGcodes);
+
+      var $gcode = $("#settings-excluderegion_newExtendedGcode");
+      var gcode = $gcode.val().trim();
+
+      var $mode = $("#settings-excluderegion_newExtendedGcodeMode");
+      var mode = $mode.val();
+
+      self.settings.extendedExcludeGcodes.push({
+        "gcode": ko.observable(gcode),
+        "mode": ko.observable(mode)
+      });
+
+      $gcode.val('');
+      $mode.val('exclude');
+    }
+    
+    self.removeExtendedGcode = function(row) {
+      console.log("removeExtendedGcode: clicked: row=", row);
+      self.settings.extendedExcludeGcodes.remove(row);
+    }
+    
     function resetExcludeButtons() {
       removeExcludeButtons();
       addExcludeButtons();
@@ -1014,7 +1060,7 @@ $(function() {
     "construct": ExcludeRegionPluginViewModel,
     "dependencies": ["gcodeViewModel", "loginStateViewModel", "printerStateViewModel", "settingsViewModel", "touchUIViewModel"],
     "optional": ["touchUIViewModel"],
-    "elements": [] //["#gcode_exclude_controls"]
+    "elements": ["#settings_plugin_excluderegion"]
   });
 
 });
