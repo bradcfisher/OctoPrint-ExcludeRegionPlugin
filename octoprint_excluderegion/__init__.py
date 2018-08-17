@@ -19,9 +19,15 @@
 #   4) Merge (args of each command found are are merged, retaining last value for each arg) and execute one combined command when leaving excluded area (e.g. M204)
 # - Setting for GCode to execute when entering an excluded region
 # - Setting for GCode to execute when exiting an excluded region
-# - Setting to specify a Gcode to look for to indicate we've reached the end script and should no longer exclude moves?  Or comment pattern to search for?
+
+# TODO: Setting to specify a Gcode to look for to indicate we've reached the end script and should no longer exclude moves?  Or comment pattern to search for? (but how to see the comments?)
 
 # TODO: Is a setting needed for control how big a retraction is recorded as one that needs to be recovered after exiting an excluded region (e.g. ignore small retractions like E-0.03)?  What could a reasonable limit be for the default?
+#--
+# The minimum retraction distance needed to trigger retraction/recovery processing while excluding
+# minimumRetractionDistance = 0.1,
+#--
+# 
 
 # TODO: Add support for multiple extruders? (gcode cmd: "T#" - selects tool #)  Each tool should have its own extruder position/axis.  What about the other axes?
 # Each tool has its own offsets and x axis position
@@ -34,17 +40,21 @@
 from __future__ import absolute_import
 
 import octoprint.plugin
+
 import flask
 import re
-import os
-import json
-import uuid
 import math
 import logging
 
 from flask.ext.login import current_user
 from octoprint.events import Events
 from octoprint.settings import settings
+
+from .RectangularRegion import RectangularRegion
+from .CircularRegion import CircularRegion
+from .AxisPosition import AxisPosition
+from .Position import Position
+from .RetractionState import RetractionState
 
 __plugin_name__ = "Exclude Region"
 
@@ -56,11 +66,6 @@ regex_split = re.compile("\s+")
 EXCLUDED_REGIONS_CHANGED = "ExcludedRegionsChanged"
 MM_PER_ARC_SEGMENT = 1
 INCHES_PER_MM = 25.4
-
-X_AXIS = 0
-Y_AXIS = 1
-Z_AXIS = 2
-E_AXIS = 3
 
 TWO_PI = 2 * math.pi
 IGNORE_GCODE_CMD = None,
@@ -80,305 +85,6 @@ def __plugin_load__():
     "octoprint.comm.protocol.gcode.queuing": __plugin_implementation__.handle_gcode_queuing
     #"octoprint.filemanager.preprocessor": __plugin_implementation__.modify_file
   }
-
-# A rectangular region to exclude from printing
-class RectangularRegion:
-  def __init__(self, **kwargs):
-    id = kwargs.get("id", None)
-    x1 = float(kwargs.get("x1"))
-    y1 = float(kwargs.get("y1"))
-    x2 = float(kwargs.get("x2"))
-    y2 = float(kwargs.get("y2"))
-
-    if (x2 < x1):
-      x1, x2 = x2, x1
-
-    if (y2 < y1):
-      y1, y2 = y2, y1
-
-    self.x1 = x1
-    self.y1 = y1
-    self.x2 = x2
-    self.y2 = y2
-    if (id == None):
-      self.id = str(uuid.uuid4())
-    else:
-      self.id = id 
-
-  def containsPoint(self, x, y):
-    return (x >= self.x1) and (x <= self.x2) and (y >= self.y1) and (y <= self.y2)
-
-  def containsRegion(self, otherRegion):
-    if (isinstance(otherRegion, RectangularRegion)):
-      return (
-        (otherRegion.x1 >= self.x1) and (otherRegion.x2 <= self.x2) and
-        (otherRegion.y1 >= self.y1) and (otherRegion.y2 <= self.y2)
-      )
-    elif (isinstance(otherRegion, CircularRegion)):
-      return (
-        (otherRegion.cx - otherRegion.r >= self.x1) and (otherRegion.cx + otherRegion.r <= self.x2) and
-        (otherRegion.cy - otherRegion.r >= self.y1) and (otherRegion.cy + otherRegion.r <= self.y2)
-      )
-    else:
-      raise ValueError("unexpected type: {otherRegion}".format(otherRegion=otherRegion))
-
-  def toDict(self):
-    return {
-      'type': self.__class__.__name__,
-      'x1': self.x1,
-      'y1': self.y1,
-      'x2': self.x2,
-      'y2': self.y2,
-      'id': self.id
-    }
-
-  def __repr__(self):
-    return json.dumps(self.toDict())
-
-
-# A circular region to exclude from printing
-class CircularRegion:
-  def __init__(self, **kwargs):
-    id = kwargs.get("id", None)
-
-    self.cx = float(kwargs.get("cx"))
-    self.cy = float(kwargs.get("cy"))
-    self.r = float(kwargs.get("r"))
-    if (id == None):
-      self.id = str(uuid.uuid4())
-    else:
-      self.id = id 
-
-  def containsPoint(self, x, y):
-    return self.r >= math.hypot(x - self.cx, y - self.cy)
-
-  def containsRegion(self, otherRegion):
-    if (isinstance(otherRegion, RectangularRegion)):
-      return (
-        self.containsPoint(otherRegion.x1, otherRegion.y1) and
-        self.containsPoint(otherRegion.x2, otherRegion.y1) and
-        self.containsPoint(otherRegion.x2, otherRegion.y2) and
-        self.containsPoint(otherRegion.x1, otherRegion.y2)
-      )
-    elif (isinstance(otherRegion, CircularRegion)):
-      return (
-        math.hypot(self.cx - otherRegion.cx, self.cy - otherRegion.cy) + otherRegion.r <= self.r
-      )
-    else:
-      raise ValueError("unexpected type: {otherRegion}".format(otherRegion=otherRegion))
-
-  def toDict(self):
-    return {
-      'type': self.__class__.__name__,
-      'cx': self.cx,
-      'cy': self.cy,
-      'r': self.r,
-      'id': self.id
-    }
-
-  def __repr__(self):
-    return json.dumps(self.toDict())
-
-
-# State information associated with an axis (X, Y, Z, E)
-class AxisPosition:
-  def __init__(self, current = None, homeOffset = 0, offset = 0, absoluteMode = True, unitMultiplier = 1):
-    if (isinstance(current, AxisPosition)):
-      self.homeOffset = current.homeOffset
-      self.offset = current.offset
-      self.absoluteMode = current.absoluteMode
-      self.unitMultiplier = current.unitMultiplier
-      self.current = current.current
-    else:
-      # Current value and offsets are stored internally in mm
-      self.current = current    # "native" position relative to the homeOffset + offset
-      self.homeOffset = homeOffset
-      self.offset = offset
-      self.absoluteMode = absoluteMode
-      # Conversion factor from logical units (e.g. inches) to mm
-      self.unitMultiplier = unitMultiplier
-
-  def toDict(self):
-    return {
-      'type': self.__class__.__name__,
-      'current': self.current,
-      'homeOffset': self.homeOffset,
-      'offset': self.offset,
-      'absoluteMode': self.absoluteMode,
-      'unitMultiplier': self.unitMultiplier
-    }
-
-  def __repr__(self):
-    return json.dumps(self.toDict())
-
-  def setAbsoluteMode(self, absoluteMode = True):
-    self.absoluteMode = absoluteMode
-
-  # Updates the offset to the delta between the current position and the specified logical position
-  def setLogicalOffsetPosition(self, position):
-    self.offset = self.current - self.logicalToNative(position)
-    self.current -= self.offset
-
-  # Sets the home offset (M206)
-  def setHomeOffset(self, homeOffset):
-    self.current += self.homeOffset
-    self.homeOffset = homeOffset * self.unitMultiplier
-    self.current -= self.homeOffset
-
-  # Resets the axis to the home position
-  def setHome(self):
-    self.current = 0
-    self.offset = 0
-
-  # Sets the conversion factor from logical units (inches, etc) to mm
-  def setUnitMultiplier(self, unitMultiplier):
-    self.unitMultiplier = unitMultiplier
-
-  # Sets the position given a location in logical units.
-  # Returns the new value of the 'current' property.
-  def setLogicalPosition(self, position):
-    if (position != None):
-      self.current = self.logicalToNative(position)
-
-    return self.current
-
-  # Converts the value from logical units (inches, etc) to native units (mm), taking into account
-  # any offsets in effect and whether the axis is in relative or absolute positioning mode.
-  def logicalToNative(self, value = None, absoluteMode = None):
-    if (value == None):
-      return self.current;
-
-    value *= self.unitMultiplier
-
-    if (absoluteMode == None):
-      absoluteMode = self.absoluteMode
-
-    if (absoluteMode):
-      value += self.offset + self.homeOffset
-    else:
-      value += self.current
-
-    return value
-
-  # Converts the value from native units (mm) to logical units (inches, etc), taking into account
-  # any offsets in effect and whether the axis is in relative or absolute positioning mode.
-  def nativeToLogical(self, value = None, absoluteMode = None):
-    if (value == None):
-      value = self.current
-
-    if (absoluteMode == None):
-      absoluteMode = self.absoluteMode
-    
-    if (absoluteMode):
-      value -= self.offset + self.homeOffset
-    else:
-      value -= self.current
-
-    return value / self.unitMultiplier
-
-
-class Position:
-  def __init__(self, position=None):
-    if (isinstance(position, Position)):
-      self.X_AXIS = AxisPosition(position.X_AXIS)
-      self.Y_AXIS = AxisPosition(position.Y_AXIS)
-      self.Z_AXIS = AxisPosition(position.Z_AXIS)
-      self.E_AXIS = AxisPosition(position.E_AXIS)
-    else:
-      self.X_AXIS = AxisPosition()
-      self.Y_AXIS = AxisPosition()
-      self.Z_AXIS = AxisPosition()
-      self.E_AXIS = AxisPosition(0)
-
-    self._position = [ self.X_AXIS, self.Y_AXIS, self.Z_AXIS, self.E_AXIS ]
-
-  def __len__(self):
-    return 4
-
-  def __getitem__(self, key):
-    return self._position[key]
-
-  def toDict(self):
-    return {
-      'type': self.__class__.__name__,
-      'X_AXIS': self.X_AXIS,
-      'Y_AXIS': self.Y_AXIS,
-      'Z_AXIS': self.Z_AXIS,
-      'E_AXIS': self.E_AXIS
-    }
-
-  def __repr__(self):
-    return json.dumps(self.toDict())
-
-# Information for a retraction that may need to be restored later
-class RetractionState:
-  def __init__(self, firmwareRetract=None, e=None, feedRate=None, originalCommand=None):
-    non_firmwareRetract = (e != None) or (feedRate != None)
-    if (firmwareRetract != None):
-      if (non_firmwareRetract):
-        raise ValueError("You cannot provide a value for e or feedRate if firmwareRetract is specified")
-    elif (not non_firmwareRetract):
-      if ((e == None) or (feedRate == None)):
-        raise ValueError("You must provide values for both e and feedRate together")
-      else:
-        raise ValueError("You must provide a value for firmwareRetract or e and feedRate")
-
-    self.recoverExcluded = False # Whether the recovery for this retraction was excluded or not
-                                  # If it was excluded, it will need to be processed later
-    self.firmwareRetract = firmwareRetract  # This was a firmware retraction (G10)
-    self.e = e                    # Amount of filament to extrude when recovering a previous retraction
-    self.feedRate = feedRate      # Feed rate for filament recovery
-    self.originalCommand = originalCommand  # Original retraction gcode
-
-  def toDict(self):
-    rv = {
-      'type': self.__class__.__name__,
-      'recoverExcluded': self.recoverExcluded,
-      'originalCommand': self.originalCommand
-    }
-    if (self.e == None):
-      rv['firmwareRetract'] = self.firmwareRetract
-    else:
-      rv['e'] = self.e
-      rv['feedRate'] = self.feedRate
-    return rv
-
-  def __repr__(self):
-    return json.dumps(self.toDict())
-
-  def addRetractCommands(self, excludeRegionPlugin, returnCommands = None):
-    return self._addCommands(self.e, excludeRegionPlugin, returnCommands)
-
-  def addRecoverCommands(self, excludeRegionPlugin, returnCommands = None):
-    return self._addCommands(-self.e, excludeRegionPlugin, returnCommands)
-
-  def _addCommands(self, amount, excludeRegionPlugin, returnCommands):
-    if (returnCommands == None):
-      returnCommands = []
-
-    if (self.firmwareRetract):
-      returnCommands.append("G11")
-    else:
-      eAxis = excludeRegionPlugin.position[E_AXIS]
-
-      eAxis.current += amount
-
-      returnCommands.append(
-        # Set logical extruder position
-        "G92 E{e}".format(e=eAxis.nativeToLogical())
-      )
-
-      eAxis.current -= amount
-
-      returnCommands.append(
-        "G1 F{f} E{e}".format(
-          e=eAxis.nativeToLogical(),
-          f=self.feedRate / eAxis.unitMultiplier
-        )
-      )
-
-    return returnCommands
-
 
 class ExcludeRegionPlugin(
   octoprint.plugin.StartupPlugin,
@@ -449,9 +155,9 @@ class ExcludeRegionPlugin(
       enteringExcludedRegionGcode = None,
       exitingExcludedRegionGcode = None,
       extendedExcludeGcodes = [
-        {"gcode":"G4", "mode":EXCLUDE_ALL},
-        {"gcode":"M204", "mode":EXCLUDE_MERGE},
-        {"gcode":"M205", "mode":EXCLUDE_MERGE}
+        {"gcode":"G4", "mode":EXCLUDE_ALL, "description":"Ignore all dwell commands in an excluded area to reduce delays while excluding"},
+        {"gcode":"M204", "mode":EXCLUDE_MERGE, "description":"Record default accelleration changes while excluding and apply the most recent values in a single command after exiting the excluded area"},
+        {"gcode":"M205", "mode":EXCLUDE_MERGE, "description":"Record advanced setting changes while excluding and apply the most recent values in a single command after exiting the excluded area"}
       ]
     )
 
@@ -569,27 +275,29 @@ class ExcludeRegionPlugin(
       )
 
     if (gcode and self.excluding):
-      mode = self.extendedExcludeGcodes.get(gcode).get("mode")
-      if (mode != None):
-        self._logger.debug("handle_other_gcode: gcode excluded by extended configuration: mode=%s, cmd=%s", mode, cmd)
+      entry = self.extendedExcludeGcodes.get(gcode)
+      if (entry != None):
+        mode = entry.get("mode")
+        if (mode != None):
+          self._logger.debug("handle_other_gcode: gcode excluded by extended configuration: mode=%s, cmd=%s", mode, cmd)
 
-        if (mode == EXCLUDE_MERGE):
-          pendingArgs = self.pendingCommands.get(gcode)
-          if (pendingArgs == None):
-            pendingArgs = {}
-            self.pendingCommands[gcode] = pendingArgs
+          if (mode == EXCLUDE_MERGE):
+            pendingArgs = self.pendingCommands.get(gcode)
+            if (pendingArgs == None):
+              pendingArgs = {}
+              self.pendingCommands[gcode] = pendingArgs
 
-          cmd_args = regex_split.split(cmd)
-          for index in range(1, len(cmd_args)):
-            arg = cmd_args[index]
-            pendingArgs[arg[0].upper()] = arg[1:]
-        elif (mode == EXCLUDE_EXCEPT_FIRST):
-          if (not (gcode in self.pendingCommands)):
+            cmd_args = regex_split.split(cmd)
+            for index in range(1, len(cmd_args)):
+              arg = cmd_args[index]
+              pendingArgs[arg[0].upper()] = arg[1:]
+          elif (mode == EXCLUDE_EXCEPT_FIRST):
+            if (not (gcode in self.pendingCommands)):
+              self.pendingCommands[gcode] = cmd
+          elif (mode == EXCLUDE_EXCEPT_LAST):
             self.pendingCommands[gcode] = cmd
-        elif (mode == EXCLUDE_EXCEPT_LAST):
-          self.pendingCommands[gcode] = cmd
 
-        return IGNORE_GCODE_CMD
+          return IGNORE_GCODE_CMD
 
     # Otherwise, let the command process normally
     return
@@ -652,8 +360,8 @@ class ExcludeRegionPlugin(
     return False
 
   def isAnyPointExcluded(self, *xyPairs):
-    xAxis = self.position[X_AXIS]
-    yAxis = self.position[Y_AXIS]
+    xAxis = self.position.X_AXIS
+    yAxis = self.position.Y_AXIS
     exclude = False
 
     for index in range(0, len(xyPairs), 2):
@@ -760,7 +468,7 @@ class ExcludeRegionPlugin(
     if (feedRate != None):
       feedRate *= self.feedRate_unitMultiplier
 
-    eAxis = self.position[E_AXIS]
+    eAxis = self.position.E_AXIS
     priorE = eAxis.current
     if (e != None):
       e = eAxis.setLogicalPosition(e)
@@ -771,7 +479,7 @@ class ExcludeRegionPlugin(
     isMove = False
 
     if (finalZ != None):
-      self.position[Z_AXIS].setLogicalPosition(finalZ)
+      self.position.Z_AXIS.setLogicalPosition(finalZ)
       isMove = True
 
     if (not isMove):
@@ -831,8 +539,8 @@ class ExcludeRegionPlugin(
         "G92 E{e}".format(e=eAxis.nativeToLogical())
       )
 
-      newZ = self.position[Z_AXIS].nativeToLogical()
-      oldZ = self.lastPosition[Z_AXIS].nativeToLogical()
+      newZ = self.position.Z_AXIS.nativeToLogical()
+      oldZ = self.lastPosition.Z_AXIS.nativeToLogical()
       moveZcmd = "G0 F{f} Z{z}".format(
         f=self.feedRate / self.feedRate_unitMultiplier,
         z=newZ
@@ -846,8 +554,8 @@ class ExcludeRegionPlugin(
         # Move X/Y axes to new position
         "G0 F{f} X{x} Y{y}".format(
           f=self.feedRate / self.feedRate_unitMultiplier,
-          x=self.position[X_AXIS].nativeToLogical(),
-          y=self.position[Y_AXIS].nativeToLogical()
+          x=self.position.X_AXIS.nativeToLogical(),
+          y=self.position.Y_AXIS.nativeToLogical()
         )
       )
 
@@ -903,8 +611,8 @@ class ExcludeRegionPlugin(
     return self.handle_G0(comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs)
 
   def plan_arc(self, endX, endY, i, j, clockwise):
-    x = self.position[X_AXIS].current;
-    y = self.position[Y_AXIS].current;
+    x = self.position.X_AXIS.current;
+    y = self.position.Y_AXIS.current;
 
     radius = math.hypot(i, j);
 
@@ -946,8 +654,8 @@ class ExcludeRegionPlugin(
   # G2 [E<pos>] [F<rate>] I<offset> J<offset> [X<pos>] [Y<pos>] [Z<pos>] 
   def handle_G2(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
     clockwise = (gcode == "G2")
-    xAxis = self.position[X_AXIS]
-    yAxis = self.position[Y_AXIS]
+    xAxis = self.position.X_AXIS
+    yAxis = self.position.Y_AXIS
 
     e = None
     f = none
@@ -969,9 +677,9 @@ class ExcludeRegionPlugin(
         elif (label == "Y"):
           y = yAxis.logicalToNative(value)
         elif (label == "Z"):
-          z = self.position[Z_AXIS].logicalToNative(value)
+          z = self.position.Z_AXIS.logicalToNative(value)
         elif (label == "E"):
-          e = self.position[E_AXIS].logicalToNative(value)
+          e = self.position.E_AXIS.logicalToNative(value)
         elif (label == "F"):
           f = value
         elif (label == "R"):
@@ -1052,29 +760,38 @@ class ExcludeRegionPlugin(
   #Set the current position to 0 for each axis in the command
   def handle_G28(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
     cmd_args = regex_split.split(cmd)
-    home = [False,False,False]
+    home_X = False
+    home_Y = False
+    home_Z = False
     for v in cmd_args:
       v = v.upper()
       if (v.startswith("X")):
-        home[X_AXIS] = True
+        home_X = True
       elif (v.startswith("Y")):
-        home[Y_AXIS] = True
+        home_Y = True
       elif (v.startswith("Z")):
-        home[Z_AXIS] = True
+        home_Z = True
 
-    if (not (home[X_AXIS] or home[Y_AXIS] or home[Z_AXIS])):
-      home = [True,True,True]
+    if (not (home_X or home_Y or home_Z)):
+      home_X = True
+      home_Y = True
+      home_Z = True
 
-    for axisIndex in range(0, 3):
-      if (home[axisIndex]):
-        self.position[axisIndex].setHome()
+    if (home_X):
+      self.position.X_AXIS.setHome()
+
+    if (home_Y):
+      self.position.Y_AXIS.setHome()
+
+    if (home_Z):
+      self.position.Z_AXIS.setHome()
 
   def setAbsoluteMode(self, absolute):
-    self.position[X_AXIS].setAbsoluteMode(True)
-    self.position[Y_AXIS].setAbsoluteMode(True)
-    self.position[Z_AXIS].setAbsoluteMode(True)
+    self.position.X_AXIS.setAbsoluteMode(True)
+    self.position.Y_AXIS.setAbsoluteMode(True)
+    self.position.Z_AXIS.setAbsoluteMode(True)
     if (self.g90InfluencesExtruder):
-      self.position[E_AXIS].setAbsoluteMode(True)
+      self.position.E_AXIS.setAbsoluteMode(True)
   
   #G90 - Set absolute positioning mode
   def handle_G90(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
@@ -1096,13 +813,13 @@ class ExcludeRegionPlugin(
         if (label == "E"):
           # Note: 1.0 Marlin and earlier stored an offset for E instead of directly updating the position
           #   This assumes the newer behavior
-          self.position[E_AXIS].setLogicalPosition(value)
+          self.position.E_AXIS.setLogicalPosition(value)
         elif (label == "X"):
-          self.position[X_AXIS].setLogicalOffsetPosition(value)
+          self.position.X_AXIS.setLogicalOffsetPosition(value)
         elif (label == "Y"):
-          self.position[Y_AXIS].setLogicalOffsetPosition(value)
+          self.position.Y_AXIS.setLogicalOffsetPosition(value)
         elif (label == "Z"):
-          self.position[Z_AXIS].setLogicalOffsetPosition(value)
+          self.position.Z_AXIS.setLogicalOffsetPosition(value)
 
   #M206 - Set home offsets
   # M206 [P<offset>] [T<offset>] [X<offset>] [Y<offset>] [Z<offset>]
@@ -1114,8 +831,8 @@ class ExcludeRegionPlugin(
         label = match.group("label").upper()
         value = float(match.group("value"))
         if (label == "X"):
-          self.position[X_AXIS].setHomeOffset(value)
+          self.position.X_AXIS.setHomeOffset(value)
         elif (label == "Y"):
-          self.position[Y_AXIS].setHomeOffset(value)
+          self.position.Y_AXIS.setHomeOffset(value)
         elif (label == "Z"):
-          self.position[Z_AXIS].setHomeOffset(value)
+          self.position.Z_AXIS.setHomeOffset(value)

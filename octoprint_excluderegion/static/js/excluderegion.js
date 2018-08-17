@@ -827,25 +827,27 @@ $(function() {
     }
 
     self.addExtendedGcode = function() {
-      console.log("addExtendedGcode: clicked: extendedExcludeGcodes=", self.settings.extendedExcludeGcodes);
-
       var $gcode = $("#settings-excluderegion_newExtendedGcode");
       var gcode = $gcode.val().trim();
 
       var $mode = $("#settings-excluderegion_newExtendedGcodeMode");
       var mode = $mode.val();
 
+      var $desc = $("#settings-excluderegion_newExtendedGcodeDescription");
+      var desc = $desc.val();
+
       self.settings.extendedExcludeGcodes.push({
         "gcode": ko.observable(gcode),
-        "mode": ko.observable(mode)
+        "mode": ko.observable(mode),
+        "description": ko.observable(desc)
       });
 
       $gcode.val('');
       $mode.val('exclude');
+      $desc.val('');
     }
     
     self.removeExtendedGcode = function(row) {
-      console.log("removeExtendedGcode: clicked: row=", row);
       self.settings.extendedExcludeGcodes.remove(row);
     }
     

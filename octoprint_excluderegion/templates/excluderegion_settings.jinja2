@@ -27,50 +27,49 @@
 
 <h4>Extended Gcodes to Exclude</h4>
 
-<table class="table table-condensed">
-  <thead>
-    <tr>
-      <th>{{ _('Gcode') }}</th>
-      <th>{{ _('Mode') }}</th>
-      <th></th>
-    </tr>
-  </thead>
-  <tbody data-bind="foreach: settings.extendedExcludeGcodes">
-    <tr data-bind="attr: {title: gcode}">
-      <td><span data-bind="text: gcode" /></td>
-      <td>
-        <select data-bind="value: mode" class="input-medium" title="{{ _('Exclude Mode') }}">
+<div class="table table-condensed container-fluid">
+  <div>
+    <div class="row-fluid">
+      <h5 class="span2">{{ _('Gcode') }}</h5>
+      <h5 class="span2">{{ _('Mode') }}</h5>
+      <h5 class="span6">{{ _('Description') }}</h5>
+      <h5 class="span2"></h5>
+    </div>
+  </div>
+  <div data-bind="foreach: settings.extendedExcludeGcodes">
+    <div data-bind="attr: {title: gcode}" class="row-fluid">
+      <span class="span2" data-bind="text: gcode"></span>
+      <span class="span2">
+        <select data-bind="value: mode" class="input-small" title="{{ _('Exclude Mode') }}">
           <option value="exclude">{{ _('Exclude') }}</option>
           <option value="first">{{ _('First') }}</option>
           <option value="last">{{ _('Last') }}</option>
           <option value="merge">{{ _('Merge') }}</option>
         </select>
-      </td>
-      <td style="text-align:center">
-        <div class="btn-group">
-          <a href="#" class="btn btn-mini icon-trash" data-bind="click: $parent.removeExtendedGcode"></a>
-        </div>
-      </td>
-    </tr>
-  </tbody>
-  <tbody>
-    <tr>
-      <td><input type="text" class="input-block-level" title="{{ _("Gcode") }}" id="settings-excluderegion_newExtendedGcode"/></td>
-      <td>
-        <select class="input-medium" title="{{ _('Exclude Mode') }}" id="settings-excluderegion_newExtendedGcodeMode">
+      </span>
+      <span class="span6"><input type="text" class="span12" data-bind="value: description, attr: {title: description}"/></span>
+      <span class="span2">
+        <a href="#" class="btn btn-mini icon-trash" data-bind="click: $parent.removeExtendedGcode" title="{{ _('Remove entry') }}"></a>
+      </span>
+    </div>
+  </div>
+  <div>
+    <div class="row-fluid">
+      <span class="span2"><input type="text" class="input-small" title="{{ _("Gcode") }}" id="settings-excluderegion_newExtendedGcode"/></span>
+      <span class="span2">
+        <select class="input-small" title="{{ _('Exclude Mode') }}" id="settings-excluderegion_newExtendedGcodeMode">
           <option value="exclude">{{ _('Exclude') }}</option>
           <option value="first">{{ _('First') }}</option>
           <option value="last">{{ _('Last') }}</option>
           <option value="merge">{{ _('Merge') }}</option>
         </select>
-      </td>
-      <td style="text-align:center">
-        <div class="btn-group">
+      </span>
+      <span class="span6"><input type="text" class="span12" title="{{ _("Description") }}" id="settings-excluderegion_newExtendedGcodeDescription"/></span>
+      <span class="span2 btn-group">
 <!-- TODO: Disable this button if the gcode value is blank or all spaces -->
-          <a href="#" class="btn btn-mini icon-plus" data-bind="click: addExtendedGcode"></a>
-        </div>
-      </td>
-    </tr>
-  </tbody>
-</table>
+        <a href="#" class="btn btn-mini icon-plus" data-bind="click: addExtendedGcode" title="{{ _('Add entry') }}"></a>
+      </span>
+    </div>
+  </div>
+</div>
 
