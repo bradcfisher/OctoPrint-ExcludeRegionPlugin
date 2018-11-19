@@ -1051,7 +1051,7 @@ $(function() {
           console.log("GCODE refresh failed:", e);
         }
       });
-      
+
       gcodeViewerPollingComplete = true;
       initializeControlsIfReady();
     };

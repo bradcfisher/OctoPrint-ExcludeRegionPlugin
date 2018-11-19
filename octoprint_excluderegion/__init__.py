@@ -45,6 +45,7 @@ import flask
 import re
 import math
 import logging
+import pkg_resources
 
 from flask.ext.login import current_user
 from octoprint.events import Events
@@ -124,8 +125,17 @@ class ExcludeRegionPlugin(
     self.notifyExcludedRegionsChanged()
 
   def get_assets(self):
+    octoprintVersion = pkg_resources.parse_version(octoprint.__version__)
+
+    jsFiles = [ "js/excluderegion.js" ]
+
+    # The modified gcode renderer is not needed for 1.3.10rc1 and above
+    if (octoprintVersion < pkg_resources.parse_version("1.3.10rc1")):
+      self._logger.info("Octoprint {} is pre 1.3.10rc1, including renderer.js to override gcode viewer", octoprint.__display_version__);
+      jsFiles.insert(0, "js/renderer.js")
+
     return dict(
-      js=["js/renderer.js", "js/excluderegion.js"],
+      js=jsFiles,
       css=["css/excluderegion.css"]
     )
 
@@ -156,7 +166,7 @@ class ExcludeRegionPlugin(
       exitingExcludedRegionGcode = None,
       extendedExcludeGcodes = [
         {"gcode":"G4", "mode":EXCLUDE_ALL, "description":"Ignore all dwell commands in an excluded area to reduce delays while excluding"},
-        {"gcode":"M204", "mode":EXCLUDE_MERGE, "description":"Record default accelleration changes while excluding and apply the most recent values in a single command after exiting the excluded area"},
+        {"gcode":"M204", "mode":EXCLUDE_MERGE, "description":"Record default acceleration changes while excluding and apply the most recent values in a single command after exiting the excluded area"},
         {"gcode":"M205", "mode":EXCLUDE_MERGE, "description":"Record advanced setting changes while excluding and apply the most recent values in a single command after exiting the excluded area"}
       ]
     )
