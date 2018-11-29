@@ -1,6 +1,6 @@
 $(function() {
 
-// TODO: If isActivePrintJob state changes while editing, the edit should be cancelled (notification to user when this happens?).
+// TODO: If isActivePrintJob state changes to printing while editing, the edit should be cancelled (notification to user when this happens?).
 
   var INSIDE = 1;
   var TOP    = 2;
@@ -799,14 +799,6 @@ $(function() {
       }
     }
 
-    self.onStartupComplete = function() {
-      addCanvasOverlays();
-      retrieveExcludeRegions();
-      if (self.loginState.loggedIn()) {
-        addExcludeButtons();
-      }
-    }
-
     self.onServerReconnect = function() {
       retrieveExcludeRegions();
     }
@@ -952,9 +944,28 @@ $(function() {
         return pt.matrixTransform(overlayXform.inverse());
     }
 
-    var pollFn = function() {
-      if (!GCODE || !GCODE.renderer || !GCODE.renderer.hijacked_by_exclude_region) {
-        setTimeout(pollFn, 10);
+    var startupComplete = false;
+    var gcodeViewerPollingComplete = false;
+
+    self.onStartupComplete = function() {
+      addCanvasOverlays();
+      retrieveExcludeRegions();
+
+      startupComplete = true;
+      initializeControlsIfReady();
+    }
+
+    function initializeControlsIfReady() {
+      if (startupComplete && gcodeViewerPollingComplete) {
+        if (self.loginState.loggedIn()) {
+          addExcludeButtons();
+        }
+      }
+    }
+
+    var gcodeViewerPollFn = function() {
+      if (!GCODE || !GCODE.renderer || !GCODE.renderer.getOptions().hasOwnProperty('onViewportChange')) {
+        setTimeout(gcodeViewerPollFn, 10);
         return;
       }
 
@@ -992,8 +1003,11 @@ $(function() {
           console.log("GCODE refresh failed:", e);
         }
       });
+      
+      gcodeViewerPollingComplete = true;
+      initializeControlsIfReady();
     };
-    setTimeout(pollFn, 10);
+    gcodeViewerPollFn();
   }
 
   OCTOPRINT_VIEWMODELS.push({
