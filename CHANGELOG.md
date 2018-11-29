@@ -1,4 +1,10 @@
 
+## [0.1.3] - 2018-11-28
+
+### Fixed
+- Issue with Octoprint 1.3.10rc1 or newer which prevented Gcode viewer event hooks from being registered
+  Resolves [#15](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/15)
+
 ## [0.1.2] - 2018-08-05
 
 ### Fixed
