@@ -20,6 +20,20 @@ class Position:
       self.Z_AXIS = AxisPosition()
       self.E_AXIS = AxisPosition(0)
 
+  def setUnitMultiplier(self, unitMultiplier):
+    self.X_AXIS.setUnitMultiplier(unitMultiplier)
+    self.Y_AXIS.setUnitMultiplier(unitMultiplier)
+    self.Z_AXIS.setUnitMultiplier(unitMultiplier)
+    self.E_AXIS.setUnitMultiplier(unitMultiplier)
+
+  def setPositionAbsoluteMode(self, absolute):
+    self.X_AXIS.setAbsoluteMode(absolute)
+    self.Y_AXIS.setAbsoluteMode(absolute)
+    self.Z_AXIS.setAbsoluteMode(absolute)
+
+  def setExtruderAbsoluteMode(self, absolute):
+    self.E_AXIS.setAbsoluteMode(absolute)
+
   def toDict(self):
     return {
       'type': self.__class__.__name__,

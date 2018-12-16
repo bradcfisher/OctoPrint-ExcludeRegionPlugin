@@ -643,7 +643,7 @@ class ExcludeRegionPlugin(
 
     # Compute the number of segments based on the length of the arc
     arcLength = angular_travel * radius
-    numSegments = math.min(math.ceil(arcLength / MM_PER_ARC_SEGMENT), 2)
+    numSegments = int(min(math.ceil(arcLength / MM_PER_ARC_SEGMENT), 2))
 
     # TODO: verify this
     angle = math.atan2(-i, -j)
@@ -656,6 +656,8 @@ class ExcludeRegionPlugin(
 
     rval += [ endX, endY ]
 
+    self._logger.debug("plan_arc(endX=%s, endY=%s, i=%s, j=%s, clockwise=%s) = %s", endX, endY, i, j, clockwise, rval)
+
     return rval
 
   #G2 - Controlled Arc Move (Clockwise)
@@ -666,9 +668,10 @@ class ExcludeRegionPlugin(
     clockwise = (gcode == "G2")
     xAxis = self.position.X_AXIS
     yAxis = self.position.Y_AXIS
+    zAxis = self.position.Z_AXIS
 
     e = None
-    f = none
+    f = None
     x = xAxis.current
     y = yAxis.current
     z = zAxis.current
@@ -687,7 +690,7 @@ class ExcludeRegionPlugin(
         elif (label == "Y"):
           y = yAxis.logicalToNative(value)
         elif (label == "Z"):
-          z = self.position.Z_AXIS.logicalToNative(value)
+          z = zAxis.logicalToNative(value)
         elif (label == "E"):
           e = self.position.E_AXIS.logicalToNative(value)
         elif (label == "F"):
@@ -735,16 +738,26 @@ class ExcludeRegionPlugin(
   #def handle_G5(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
     # TODO: Implement
 
-  #G10 - Retract
+  #G10 [S0 or S1] - Retract (if no P or L parameter)
+  #  S parameter is for Repetier (0 = short retract, 1 = long retract)
+  #  Existence of a P or L parameter indicates RepRap tool offset/temperature or workspace
+  #    coordinates and is simply passed through unfiltered
   def handle_G10(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
-    self._logger.debug("handle_G10: firmware retraction")
+    cmd_args = regex_split.split(cmd)
+    for index in range(1, len(cmd_args)):
+      argType = cmd_args[index][0].upper()
+      if (argType == "P") or (argType == "L"):
+        return
+
+    self._logger.debug("handle_G10: firmware retraction: cmd=%s", cmd)
     returnCommands = self.recordRetraction(RetractionState(firmwareRetract = True, originalCommand = cmd), None)
     if (returnCommands == None):
       return IGNORE_GCODE_CMD
     else:
       return returnCommands
 
-  #G11 - Recover (unretract)
+  #G11 [S0 or S1] - Recover (unretract)
+  #  S parameter is for Repetier (0 = short unretract, 1 = long unretract)
   def handle_G11(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
     returnCommands = self.recoverRetractionIfNeeded(None, cmd, True)
     if (returnCommands == None):
@@ -754,8 +767,7 @@ class ExcludeRegionPlugin(
 
   def setUnitMultiplier(self, unitMultiplier):
     self.feedRate_unitMultiplier = unitMultiplier;
-    for axis in self.position:
-      axis.setUnitMultiplier(unitMultiplier)
+    self.position.setUnitMultiplier(unitMultiplier)
 
   #G20 - Set units to inches
   def handle_G20(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
@@ -797,11 +809,9 @@ class ExcludeRegionPlugin(
       self.position.Z_AXIS.setHome()
 
   def setAbsoluteMode(self, absolute):
-    self.position.X_AXIS.setAbsoluteMode(True)
-    self.position.Y_AXIS.setAbsoluteMode(True)
-    self.position.Z_AXIS.setAbsoluteMode(True)
+    self.position.setPositionAbsoluteMode(absolute)
     if (self.g90InfluencesExtruder):
-      self.position.E_AXIS.setAbsoluteMode(True)
+      self.position.setExtruderAbsoluteMode(absolute)
   
   #G90 - Set absolute positioning mode
   def handle_G90(self, comm_instance, phase, cmd, cmd_type, gcode, subcode, tags, *args, **kwargs):
