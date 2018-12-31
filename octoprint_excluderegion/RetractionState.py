@@ -1,74 +1,157 @@
 # coding=utf-8
+"""Module providing the RetractionState class."""
 
 from __future__ import absolute_import
+from .CommonMixin import CommonMixin
 
-import json
 
-# Information for a retraction that may need to be restored later
-class RetractionState:
-  def __init__(self, firmwareRetract=None, e=None, feedRate=None, originalCommand=None):
-    non_firmwareRetract = (e != None) or (feedRate != None)
-    if (firmwareRetract != None):
-      if (non_firmwareRetract):
-        raise ValueError("You cannot provide a value for e or feedRate if firmwareRetract is specified")
-    elif (not non_firmwareRetract):
-      if ((e == None) or (feedRate == None)):
-        raise ValueError("You must provide values for both e and feedRate together")
-      else:
-        raise ValueError("You must provide a value for firmwareRetract or e and feedRate")
+class RetractionState(CommonMixin):
+    """
+    Information for a retraction that may need to be restored later.
 
-    self.recoverExcluded = False # Whether the recovery for this retraction was excluded or not
-                                  # If it was excluded, it will need to be processed later
-    self.firmwareRetract = firmwareRetract  # This was a firmware retraction (G10)
-    self.e = e                    # Amount of filament to extrude when recovering a previous retraction
-    self.feedRate = feedRate      # Feed rate for filament recovery
-    self.originalCommand = originalCommand  # Original retraction gcode
+    Attributes
+    ----------
+    recoverExcluded : boolean
+        Whether the recovery for this retraction was excluded or not.  If it was excluded, it will
+        need to be processed later.
+    firmwareRetract : boolean
+        This was a firmware retraction (G10)
+    extrusionAmount : float | None
+        Amount of filament to extrude when recovering a previous retraction.  Will be None if
+        firmwareRetract is True.
+    feedRate : float
+        Feed rate for filament recovery.  Will be None if firmwareRetract is True.
+    originalCommand : string
+        Original retraction gcode
+    """
 
-  def toDict(self):
-    rv = {
-      'type': self.__class__.__name__,
-      'recoverExcluded': self.recoverExcluded,
-      'originalCommand': self.originalCommand
-    }
-    if (self.e == None):
-      rv['firmwareRetract'] = self.firmwareRetract
-    else:
-      rv['e'] = self.e
-      rv['feedRate'] = self.feedRate
-    return rv
+    def __init__(
+            self, firmwareRetract=None, extrusionAmount=None, feedRate=None, originalCommand=None
+    ):
+        """
+        Initialize the instance properties.
 
-  def __repr__(self):
-    return json.dumps(self.toDict())
+        Parameters
+        ----------
+        firmwareRetract : boolean
+            Whether this was a firmware retraction (G10) or not (G0/G1 with no XYZ move)
+        extrusionAmount : float | None
+            Amount of filament to extrude when recovering a previous retraction.  Will be None if
+            firmwareRetract is True.
+        feedRate : float
+            Feed rate for filament recovery.  Will be None if firmwareRetract is True.
+        originalCommand : string
+            The original Gcode command for the retraction
+        """
+        nonFirmwareRetract = (extrusionAmount is not None) or (feedRate is not None)
+        if (firmwareRetract is not None):
+            if (nonFirmwareRetract):
+                raise ValueError(
+                    "You cannot provide a value for extrusionAmount or feedRate if " +
+                    "firmwareRetract is specified"
+                )
+        elif (not nonFirmwareRetract):
+            if ((extrusionAmount is None) or (feedRate is None)):
+                raise ValueError(
+                    "You must provide values for both extrusionAmount and feedRate together"
+                )
+            else:
+                raise ValueError(
+                    "You must provide a value for firmwareRetract or extrusionAmount and feedRate"
+                )
 
-  def addRetractCommands(self, excludeRegionPlugin, returnCommands = None):
-    return self._addCommands(self.e, excludeRegionPlugin, returnCommands)
+        self.recoverExcluded = False
+        self.firmwareRetract = firmwareRetract
+        self.extrusionAmount = extrusionAmount
+        self.feedRate = feedRate
+        self.originalCommand = originalCommand
 
-  def addRecoverCommands(self, excludeRegionPlugin, returnCommands = None):
-    return self._addCommands(-self.e, excludeRegionPlugin, returnCommands)
+    def addRetractCommands(self, position, returnCommands=None):
+        """
+        Add the necessary commands to perform a retraction for this instance.
 
-  def _addCommands(self, amount, excludeRegionPlugin, returnCommands):
-    if (returnCommands == None):
-      returnCommands = []
+        Parameters
+        ----------
+        position : Position
+            The tool position state to apply the retraction to.
+        returnCommands : List of gcode commands
+            The Gcode command list to append the new command(s) to.  If None, a new list will be
+            created.
 
-    if (self.firmwareRetract):
-      returnCommands.append("G11")
-    else:
-      eAxis = excludeRegionPlugin.position.E_AXIS
+        Returns
+        -------
+        List of gcode commands
+            The Gcode command list provided in *returnCommands* or a newly created list.  The
+            retraction command(s) will be appended to the returned list.
+        """
+        return self._addCommands(1, position, returnCommands)
 
-      eAxis.current += amount
+    def addRecoverCommands(self, position, returnCommands=None):
+        """
+        Add the necessary commands to perform a recovery for this instance.
 
-      returnCommands.append(
-        # Set logical extruder position
-        "G92 E{e}".format(e=eAxis.nativeToLogical())
-      )
+        Parameters
+        ----------
+        position : Position
+            The tool position state to apply the retraction to.
+        returnCommands : List of gcode commands
+            The Gcode command list to append the new command(s) to.  If None, a new list will be
+            created.
 
-      eAxis.current -= amount
+        Returns
+        -------
+        List of gcode commands
+            The Gcode command list provided in *returnCommands* or a newly created list.  The
+            recovery command(s) will be appended to the returned list.
+        """
+        return self._addCommands(-1, position, returnCommands)
 
-      returnCommands.append(
-        "G1 F{f} E{e}".format(
-          e=eAxis.nativeToLogical(),
-          f=self.feedRate / eAxis.unitMultiplier
-        )
-      )
+    def _addCommands(self, direction, position, returnCommands):
+        """
+        Add the necessary commands to perform a retraction or recovery for this instance.
 
-    return returnCommands
+        Parameters
+        ----------
+        direction : { 1, -1 }
+            For non-firmware retractions, the direction multiplier to apply to the extrusion
+            amount.  Use 1 for retract, -1 for recover.
+        position : Position
+            The tool position state to apply the retraction to.
+        returnCommands : List of gcode commands
+            The Gcode command list to append the new command(s) to.  If None, a new list will be
+            created.
+
+        Returns
+        -------
+        List of gcode commands
+            The Gcode command list provided in *returnCommands* or a newly created list.  The
+            new command(s) will be appended to the returned list.
+        """
+        if (returnCommands is None):
+            returnCommands = []
+
+        if (self.firmwareRetract):
+            if (direction == -1):
+                returnCommands.append("G11")
+            else:
+                returnCommands.append("G10")
+        else:
+            amount = self.extrusionAmount * direction
+            eAxis = position.E_AXIS
+            eAxis.current += amount
+
+            returnCommands.append(
+                # Set logical extruder position
+                "G92 E{e}".format(e=eAxis.nativeToLogical())
+            )
+
+            eAxis.current -= amount
+
+            returnCommands.append(
+                "G1 F{f} E{e}".format(
+                    e=eAxis.nativeToLogical(),
+                    f=self.feedRate / eAxis.unitMultiplier
+                )
+            )
+
+        return returnCommands

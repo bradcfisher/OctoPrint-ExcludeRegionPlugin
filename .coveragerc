@@ -1,0 +1,8 @@
+
+[run]
+branch = True
+data_file = build/coverage/coverage.dat
+source = octoprint_excluderegion
+
+[html]
+directory = build/coverage/html
