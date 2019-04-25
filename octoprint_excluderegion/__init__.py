@@ -91,16 +91,19 @@ class ExcludeRegionPlugin(
         GcodeHandlers instance providing the actual Gcode processing
     """
 
-    def __init__(self):
-        """Initialize the instance properties to their default values."""
+    def initialize(self):
+        """
+        Perform plugin initialization.
+        
+        This method is automatically invoked by OctorPrint when the plugin is loaded, and is called
+        after all injected properties are populated.
+        """
         self.clearRegionsAfterPrintFinishes = False
         self._activePrintJob = False
-
-    def on_after_startup(self):
-        """Perform initialization that requires the OctoPrint startup to be complete first."""
         self.gcodeHandlers = GcodeHandlers(self._logger)
         self.handleSettingsUpdated()
         self.notifyExcludedRegionsChanged()
+        self._logger.debug("Plugin initialization complete")
 
     def get_assets(self):
         """Define the static assets the plugin offers."""
@@ -128,9 +131,7 @@ class ExcludeRegionPlugin(
         ]
 
     def getUpdateInformation(self):
-        """
-
-        """
+        """Return the information necessary for OctoPrint to determine if a new plugin version is available."""
         return dict(
             excluderegion=dict(
                 displayName=__plugin_name__,
@@ -268,7 +269,7 @@ class ExcludeRegionPlugin(
         if current_user.is_anonymous():
             return "Insufficient rights", 403
 
-        self._logger.info("API command received: %s", data)
+        self._logger.debug("API command received: %s", data)
 
         if (command == "deleteExcludeRegion"):
             self.handleDeleteExcludeRegion(data.get("id"))
@@ -423,7 +424,8 @@ class ExcludeRegionPlugin(
         payload : dict
             Additional event data
         """
-        self._logger.info("Event received: event=%s payload=%s", event, payload)
+        self._logger.debug("Event received: event=%s payload=%s", event, payload)
+
         if (event == Events.FILE_SELECTED):
             self._logger.info("File selected, resetting internal state")
             self.gcodeHandlers.resetInternalPrintState(True)
@@ -468,7 +470,7 @@ class ExcludeRegionPlugin(
               val["mode"],
               val["description"]
             )
-            self._logger.info("copy extended gcode entry: %s", val)
+            self._logger.debug("copy extended gcode entry: %s", val)
             extendedExcludeGcodes[val.gcode] = val
         self.gcodeHandlers.extendedExcludeGcodes = extendedExcludeGcodes
 

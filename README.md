@@ -43,5 +43,44 @@ or manually using this URL:
 
 ## Configuration
 
-There currently are no plugin-specific options, although it does utilize the value of the standard
-`G90/G91 overrides relative extruder mode` feature.
+The plugin currently utilizes the the value of the standard `G90/G91 overrides relative extruder mode` feature, as well as providing several plugin-specific configuration options.
+
+
+
+
+## How it Works
+
+The plugin intercepts all Gcode commands sent to your 3D printer by Octoprint while printing.  By inspecting the commands, the plugin tracks the position of the extruder, and, if the extruder moves into an excluded region, certain Gcode commands will be modified or filtered by the plugin to prevent physical movement and extrusion within that region.
+
+The following Gcode commands are currently utilized by the plugin, and all others are simply passed through.
+
+    G0 [X Y Z E F] - Linear move
+    G1 [X Y Z E F] - Linear move
+    G2 [E F R X Y Z] or G2 [E F I J X Y Z] - Clockwise Arc
+    G3 [E F R X Y Z] or G3 [E F I J X Y Z] - Counter-Clockwise Arc
+
+The above commands are inspected to update the tool position, and will not be transmitted to the printer if the tool is inside an excluded region.  Retractions are processed to ensure that the filament position is in the expected state when exiting an excluded region.
+
+    G4 - dwell / delay
+
+Delay commands are ignored when inside an excluded region to reduce oozing.  The default behavior for dwell commands may be changed in the plugin settings.
+
+    G10 - Firmware retract (only if no P or L parameter.  If P (tool number) or L (offset mode) is provided, the command is assumed to be a tool/workspace offset and the command is passed through unfiltered)
+    G11 - Firmware unretract
+
+Firmware retractions are processed to ensure that the filament position is in the expected state when exiting an excluded region.
+
+    G20 - Set units to inches
+    G21 - Set units to mm
+    G28 [X Y Z] - Home axis
+    G90 - Absolute positioning mode
+    G91 - Relative positioning mode
+    G92 [X Y Z E] - Set current position
+    M206 [P T X Y Z] - Set home offsets
+
+The above commands are inspected to track the current tool position.
+
+    M204 - Set accelerations
+    M205 - Set advanced settings
+
+By default, M204 and M205 are tracked while excluding, but only the last value set for each parameter is processed after exiting the excluded area.  This behavior is intended to reduce the amount of communication with the printer while processing excluded commands to reduce processing delays and oozing.  The behavior for these commands may be modified in the plugin settings.

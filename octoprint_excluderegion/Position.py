@@ -44,6 +44,48 @@ class Position(CommonMixin):
             self.Z_AXIS = AxisPosition(position.Z_AXIS)
             self.E_AXIS = AxisPosition(position.E_AXIS)
 
+    def toDict(self):
+        """
+        Return a dictionary representation of this object.
+
+        Returns
+        -------
+        dict
+        """
+        return {
+          "type": self.__class__.__name__,
+          "current": {
+            "x" : self.X_AXIS.current,
+            "y" : self.Y_AXIS.current,
+            "z" : self.Z_AXIS.current,
+            "e" : self.E_AXIS.current
+          },
+          "homeOffset" : {
+            "x" : self.X_AXIS.homeOffset,
+            "y" : self.Y_AXIS.homeOffset,
+            "z" : self.Z_AXIS.homeOffset,
+            "e" : self.E_AXIS.homeOffset
+          },
+          "offset" : {
+            "x" : self.X_AXIS.offset,
+            "y" : self.Y_AXIS.offset,
+            "z" : self.Z_AXIS.offset,
+            "e" : self.E_AXIS.offset
+          },
+          "absoluteMode" : {
+            "x" : self.X_AXIS.absoluteMode,
+            "y" : self.Y_AXIS.absoluteMode,
+            "z" : self.Z_AXIS.absoluteMode,
+            "e" : self.E_AXIS.absoluteMode
+          },
+          "unitMultiplier" : {
+            "x" : self.X_AXIS.unitMultiplier,
+            "y" : self.Y_AXIS.unitMultiplier,
+            "z" : self.Z_AXIS.unitMultiplier,
+            "e" : self.E_AXIS.unitMultiplier
+          }
+        }
+
     def setUnitMultiplier(self, unitMultiplier):
         """
         Set the conversion factor from logical units to native units for all of the axes (G20, G21).

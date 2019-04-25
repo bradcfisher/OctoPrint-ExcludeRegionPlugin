@@ -4,6 +4,20 @@
 from __future__ import absolute_import
 
 import json
+from datetime import date, datetime
+
+
+def json_serial(obj):
+    """JSON serializer for objects not serializable by default json code"""
+
+    toDict = getattr(obj, "toDict")
+    if (toDict is not None):
+      return toDict()
+
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+
+    return json.JSONEncoder.default(self, obj)
 
 
 class CommonMixin(object):
@@ -23,6 +37,17 @@ class CommonMixin(object):
         result['type'] = self.__class__.__name__
         return result
 
+    def toJson(self):
+        """
+        Return a JSON string representation of this object.
+
+        Returns
+        -------
+        string
+            JSON representation of the dictionary returned by toDict()
+        """
+        return json.dumps(self.toDict(), default=json_serial)
+
     def __repr__(self):
         """
         Return a string representation of this object.
@@ -32,7 +57,7 @@ class CommonMixin(object):
         string
             JSON representation of the dictionary returned by toDict()
         """
-        return json.dumps(self.toDict())
+        return self.toJson()
 
     def __eq__(self, value):
         """

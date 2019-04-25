@@ -3,7 +3,7 @@
 
 ### Fixed
 - Reduced the level for certain logging calls to improve performance for most users by reducing writes to the log
-  Resolves [#9](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/9)
+  Resolves [#9](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/9), [#26](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/26)
 - Fix a couple of Python code isses with arc processing
   Resolves [#18](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/18)
 - Correct computation of logical position offset (G92)
@@ -13,7 +13,7 @@
 ### Changed
 
 Code quality enhancements:
-- Added Makefile with some common commands for running tests, coverage, linting, generating documentation, etc
+- Added Makefile with some common commands for starting a test OctoPrint instance with the plugin loaded, executing tests, code coverage, linting, generating documentation, etc
 - Modularized and organized code
 - Applied many code style and lint suggestions
 - Added unit tests for several classes
@@ -22,7 +22,7 @@ Settings & Configuration:
 - Add a setting to configure default behavior for retaining/clearing excluded regions when a print completes
   Relates to [#4](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/4)
   Resolves [#8](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/8)
-- Add a way to configure additional Gcodes to ignore when excluding.  Current supports 4 modes:
+- Added a way to configure additional Gcodes to ignore when excluding.  Currently supports four modes:
   1) Exclude completely (e.g. G4)
   2) First (only the first command encountered is executed when leaving excluded area)
   3) Last (only the last command encountered is executed when leaving excluded area)

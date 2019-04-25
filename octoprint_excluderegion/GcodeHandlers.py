@@ -85,7 +85,8 @@ class GcodeHandlers(object):
     lastRetraction : RetractionState | None
         Retraction that may need to be recovered.
     lastPosition : Position | None
-        Last position state before entering an excluded area.
+        Last position state before entering an excluded area.  Used for determining the best time
+        to perform Z-axis moves when exiting an excluded region (e.g. before or after X/Y moves)
     pendingCommands : dict of Gcode commands and their arguments
         Storage for pending commands to execute when exiting an excluded area.
     """
@@ -285,7 +286,7 @@ class GcodeHandlers(object):
             if (not exclude and self.isPointExcluded(x, y)):
                 exclude = True
 
-        self._logger.debug("isAnyPointExcluded: pt=%s,%s: %s", x, y, "TRUE" if exclude else "FALSE")
+        self._logger.debug("isAnyPointExcluded: pt=%s,%s: %s", x, y, exclude)
         return exclude
 
     def recordRetraction(self, retract, returnCommands):
@@ -462,6 +463,11 @@ class GcodeHandlers(object):
         List of Gcode commands
             The Gcode command(s) to execute, if any.
         """
+        isDebug = self._logger.isEnabledFor(logging.DEBUG)
+        startPosition = None
+        if (isDebug):
+            startPosition = Position(self.position)
+
         if (feedRate is not None):
             feedRate *= self.feedRateUnitMultiplier
 
@@ -490,13 +496,14 @@ class GcodeHandlers(object):
 
         returnCommands = None
 
-        self._logger.debug(
-            "processLinearMoves: " +
-            "cmd=%s, isMove=%s, extruderPosition=%s, priorE=%s, deltaE=%s, feedRate=%s, " +
-            "finalZ=%s, xyPairs=%s, excluding=%s, lastRetraction=%s",
-            cmd, isMove, extruderPosition, priorE, deltaE, feedRate,
-            finalZ, xyPairs, self.excluding, self.lastRetraction
-        )
+        if (isDebug):
+            self._logger.debug(
+                "processLinearMoves: " +
+                "cmd=%s, isMove=%s, extruderPosition=%s, priorE=%s, deltaE=%s, feedRate=%s, " +
+                "finalZ=%s, xyPairs=%s, excluding=%s, lastRetraction=%s, startPosition=%s",
+                cmd, isMove, extruderPosition, priorE, deltaE, feedRate,
+                finalZ, xyPairs, self.excluding, self.lastRetraction, startPosition
+            )
 
         if (not isMove):
             if (deltaE < 0):
@@ -517,12 +524,7 @@ class GcodeHandlers(object):
                 returnCommands = [cmd]
         elif (self.isAnyPointExcluded(*xyPairs)):
             if (not self.excluding):
-                self._logger.info("processLinearMoves: START excluding: cmd=%s", cmd)
-            self.excluding = True
-            self.lastPosition = Position(self.position)
-
-            if (self.enteringExcludedRegionGcode is not None):
-                returnCommands = [self.enteringExcludedRegionGcode]
+                returnCommands = self.enterExcludedRegion(cmd, returnCommands)
         elif (self.excluding):
             returnCommands = self.exitExcludedRegion(cmd, returnCommands)
         else:
@@ -533,10 +535,39 @@ class GcodeHandlers(object):
             else:
                 returnCommands = [cmd]
 
-        self._logger.debug("processLinearMoves: returnCommands=%s", returnCommands)
+        if (isDebug):
+            self._logger.debug("processLinearMoves: returnCommands=%s, endPosition=%s", returnCommands, self.position)
 
         if (returnCommands is None):
             returnCommands = IGNORE_GCODE_CMD
+
+        return returnCommands
+
+    def enterExcludedRegion(self, cmd, returnCommands):
+        """
+        Determine the Gcode commands to execute when the tool enters an excluded region.
+
+        Parameters
+        ----------
+        cmd : string
+            The Gcode command that caused the tool to exit the excluded region.
+        returnCommands : List of Gcode commands | None
+            The Gcode command list to append any new command(s) to.  If None, a new list will be
+            created.
+
+        Returns
+        -------
+        List of Gcode commands
+            The Gcode command(s) to execute, if any.
+        """
+        self.excluding = True
+        self.lastPosition = Position(self.position)
+        self._logger.debug("START excluding: cmd=%s", cmd)
+
+        if (self.enteringExcludedRegionGcode is not None):
+            if (returnCommands is None):
+                returnCommands = []
+            returnCommands.append(self.enteringExcludedRegionGcode)
 
         return returnCommands
 
@@ -609,8 +640,8 @@ class GcodeHandlers(object):
             # (hopefully we avoided hitting any part we may pass over)
             returnCommands.append(moveZcmd)
 
-        self._logger.info(
-            "processLinearMoves: STOP excluding: cmd=%s, returnCommands=%s",
+        self._logger.debug(
+            "STOP excluding: cmd=%s, returnCommands=%s",
             cmd, returnCommands
         )
 
