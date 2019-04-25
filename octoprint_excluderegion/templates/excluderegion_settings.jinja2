@@ -10,17 +10,26 @@
     </div>
   </div>
 
+  <div class="control-group" title="{{ _('Whether exclude regions may be deleted or reduced in size when actively printing') }}">
+    <div class="controls">
+      <label class="checkbox">
+        <input type="checkbox" data-bind="checked: settings.allowShrinkingRegionsWhilePrinting">
+        {{ _('Allow Deleting or Shrinking Regions while Printing') }}
+      </label>
+    </div>
+  </div>
+
   <div class="control-group" title="{{ _('Gcode to execute when entering an excluded region') }}">
     <label class="control-label" for="settings-excluderegion-enterRegionGcode">{{ _('Enter Exclude Region Gcode') }}</label>
       <div class="controls">
-        <input type="text" class="input-block-level" data-bind="value: settings.enteringExcludedRegionGcode" id="settings-excluderegion-enterRegionGcode">
+        <textarea class="input-block-level" data-bind="value: settings.enteringExcludedRegionGcode" id="settings-excluderegion-enterRegionGcode"></textarea>
       </div>
   </div>
 
   <div class="control-group" title="{{ _('Gcode to execute when leaving an excluded region') }}">
     <label class="control-label" for="settings-excluderegion-exitRegionGcode">{{ _('Exit Exclude Region Gcode') }}</label>
     <div class="controls">
-      <input type="text" class="input-block-level" data-bind="value: settings.exitingExcludedRegionGcode" id="settings-excluderegion-exitRegionGcode">
+      <textarea class="input-block-level" data-bind="value: settings.exitingExcludedRegionGcode" id="settings-excluderegion-exitRegionGcode"></textarea>
     </div>
   </div>
 </form>

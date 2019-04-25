@@ -85,6 +85,9 @@ class ExcludeRegionPlugin(
     clearRegionsAfterPrintFinishes : boolean
         Whether to clear the exclusion regions after the next print completes or not.  Populated
         from the setting of the same name.
+    allowShrinkingRegionsWhilePrinting : boolean
+        Whether exclude regions may be deleted or reduced in size when actively printing. Populated
+        from the setting of the same name.
     _activePrintJob : boolean
         Whether a print is currently in progress or not.
     gcodeHandlers : GcodeHandlers
@@ -95,10 +98,9 @@ class ExcludeRegionPlugin(
         """
         Perform plugin initialization.
         
-        This method is automatically invoked by OctorPrint when the plugin is loaded, and is called
+        This method is automatically invoked by OctoPrint when the plugin is loaded, and is called
         after all injected properties are populated.
         """
-        self.clearRegionsAfterPrintFinishes = False
         self._activePrintJob = False
         self.gcodeHandlers = GcodeHandlers(self._logger)
         self.handleSettingsUpdated()
@@ -150,6 +152,7 @@ class ExcludeRegionPlugin(
         """Return a dictionary of the default plugin settings."""
         return dict(
             clearRegionsAfterPrintFinishes=False,
+            allowShrinkingRegionsWhilePrinting=False,
             enteringExcludedRegionGcode=None,
             exitingExcludedRegionGcode=None,
             extendedExcludeGcodes=[
@@ -323,7 +326,7 @@ class ExcludeRegionPlugin(
         ValueError
             If a print is currently in progress.
         """
-        if (self.isActivePrintJob()):
+        if (not self.allowShrinkingRegionsWhilePrinting and self.isActivePrintJob()):
             raise ValueError("cannot delete region while printing")
 
         if (self.gcodeHandlers.deleteRegion(idToDelete)):
@@ -344,7 +347,10 @@ class ExcludeRegionPlugin(
             If the new region does not have an assigned id or a print job is active and the
             old region is not fully contained in the new region.
         """
-        self.gcodeHandlers.replaceRegion(newRegion, self.isActivePrintJob())
+        self.gcodeHandlers.replaceRegion(
+            newRegion,
+            not self.allowShrinkingRegionsWhilePrinting and self.isActivePrintJob()
+        )
         self.notifyExcludedRegionsChanged()
 
     def notifyExcludedRegionsChanged(self):
@@ -454,6 +460,9 @@ class ExcludeRegionPlugin(
         self.clearRegionsAfterPrintFinishes = \
             self._settings.getBoolean(["clearRegionsAfterPrintFinishes"])
 
+        self.allowShrinkingRegionsWhilePrinting = \
+            self._settings.getBoolean(["allowShrinkingRegionsWhilePrinting"])
+
         self.gcodeHandlers.g90InfluencesExtruder = \
             settings().getBoolean(["feature", "g90InfluencesExtruder"])
 
@@ -476,11 +485,13 @@ class ExcludeRegionPlugin(
 
         self._logger.info(
             "Setting update detected: g90InfluencesExtruder=%s, " +
-            "clearRegionsAfterPrintFinishes=%s, enteringExcludedRegionGcode=%s, " +
-            "exitingExcludedRegionGcode=%s, extendedExcludeGcodes=%s",
+            "clearRegionsAfterPrintFinishes=%s, allowShrinkingRegionsWhilePrinting=%s," +
+            "enteringExcludedRegionGcode=%s, exitingExcludedRegionGcode=%s, " +
+            "extendedExcludeGcodes=%s",
             self.gcodeHandlers.g90InfluencesExtruder,
-            self.clearRegionsAfterPrintFinishes, self.gcodeHandlers.enteringExcludedRegionGcode,
-            self.gcodeHandlers.exitingExcludedRegionGcode, extendedExcludeGcodes
+            self.clearRegionsAfterPrintFinishes, self.allowShrinkingRegionsWhilePrinting,
+            self.gcodeHandlers.enteringExcludedRegionGcode, self.gcodeHandlers.exitingExcludedRegionGcode,
+            extendedExcludeGcodes
         )
 
     # pylint: disable=invalid-name,too-many-arguments,unused-argument

@@ -19,9 +19,12 @@ Code quality enhancements:
 - Added unit tests for several classes
 
 Settings & Configuration:
-- Add a setting to configure default behavior for retaining/clearing excluded regions when a print completes
+- Added a setting to configure default behavior for retaining/clearing excluded regions when a print completes
   Relates to [#4](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/4)
   Resolves [#8](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/8)
+- Added a setting to enable deleting or shrinking exclusion regions while printing.
+  Relates to [#24](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/24)
+  Resolves [#19](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/19), [#20](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/20)
 - Added a way to configure additional Gcodes to ignore when excluding.  Currently supports four modes:
   1) Exclude completely (e.g. G4)
   2) First (only the first command encountered is executed when leaving excluded area)

@@ -1,7 +1,5 @@
 $(function() {
 
-// TODO: If isActivePrintJob state changes to printing while editing, the edit should be cancelled (notification to user when this happens?).
-
   var INSIDE = 1;
   var TOP    = 2;
   var BOTTOM = 4;
@@ -212,12 +210,13 @@ $(function() {
       enableExcludeButtons(self.isFileSelected());
     });
 
-    self.isActivePrintJob = ko.pureComputed(function() {
+    self.isEditingLimited = ko.pureComputed(function() {
       // Ensure all observables are called so dependency tracking works correctly
       var isPrinting = self.printerState.isPrinting();
       var isPausing = self.printerState.isPausing();
       var isPaused = self.printerState.isPaused();
-      return isPrinting || isPaused || isPausing;
+      var allowShrinkingRegionsWhilePrinting = self.settings.allowShrinkingRegionsWhilePrinting();
+      return (isPrinting || isPaused || isPausing) && !allowShrinkingRegionsWhilePrinting;
     });
 
     self.excludedRegions = ko.observableArray();
@@ -238,7 +237,7 @@ $(function() {
     var selectedRegion = null;
     var originalRegion = null;
     var selectedRegionType = null;
-    var editMode = null;  // first|size|adjust-new|adjust|select
+    var editMode = null;  // new|size|adjust|adjust-limited|select
 
 /*    
     var $outputOverlay = $('<div id="gcode_output_overlay">');
@@ -309,7 +308,7 @@ $(function() {
     // Updates the mouse cursor when modifying a region
     function handleAdjustMouseHover(e) {
       var pt = eventPositionToCanvasPt(e);
-      updateCursor(selectedRegion, pt, (editMode == "adjust-new"));
+      updateCursor(selectedRegion, pt, (editMode == "adjust"));
     }
 
     // Updates the mouse cursor to indicate what action (move, resize, none) can be taken for a
@@ -421,7 +420,7 @@ $(function() {
         $gcodeCanvas.off("mousemove", mouseMoveHandler);
         $gcodeCanvas.off("mouseup", mouseUpHandler);
 
-        beginEditMode(selectedRegion, "adjust-new");
+        beginEditMode(selectedRegion, "adjust");
       }
 
       $gcodeCanvas.on("mousemove", mouseMoveHandler);
@@ -436,11 +435,11 @@ $(function() {
       console.log("captureDragStartEventSize: pt=", startPt);
       var near = selectedRegion.pointNearRegion(startPt, 5);
       
-      var isNewOrNotPrinting = (editMode == "adjust-new");
+      var isFullEditingEnabled = (editMode == "adjust");
 
-      updateCursor(selectedRegion, startPt, isNewOrNotPrinting);
+      updateCursor(selectedRegion, startPt, isFullEditingEnabled);
 
-      if (!near || (!isNewOrNotPrinting && (near == INSIDE)))
+      if (!near || (!isFullEditingEnabled && (near == INSIDE)))
         return;
 
       var $gcodeCanvas = $("#gcode_canvas");
@@ -487,20 +486,20 @@ $(function() {
             var y2 = originalRegion.y2;
 
             if (near & LEFT) {
-              selectedRegion.x1 = (isNewOrNotPrinting || pt.x <= x1 ? pt.x : x1);
+              selectedRegion.x1 = (isFullEditingEnabled || pt.x <= x1 ? pt.x : x1);
             } else if (near & RIGHT) {
-              selectedRegion.x2 = (isNewOrNotPrinting || pt.x >= x2 ? pt.x : x2);
+              selectedRegion.x2 = (isFullEditingEnabled || pt.x >= x2 ? pt.x : x2);
             }
 
             if (near & TOP) {
-              selectedRegion.y1 = (isNewOrNotPrinting || pt.y <= y1 ? pt.y : y1);
+              selectedRegion.y1 = (isFullEditingEnabled || pt.y <= y1 ? pt.y : y1);
             } else if (near & BOTTOM) {
-              selectedRegion.y2 = (isNewOrNotPrinting || pt.y >= y2 ? pt.y : y2);
+              selectedRegion.y2 = (isFullEditingEnabled || pt.y >= y2 ? pt.y : y2);
             }
           } else if (selectedRegion instanceof CircularRegion) {
             // Compute new size
             var r = Math.hypot(pt.x - selectedRegion.cx, pt.y - selectedRegion.cy);
-            if (!isNewOrNotPrinting)
+            if (!isFullEditingEnabled)
               r = Math.max(r, originalRegion.r);
 
             selectedRegion.r = r;
@@ -551,8 +550,8 @@ $(function() {
 
     function beginEditMode(regionOrType, messageType) {
       editMode = messageType;
-      if ((editMode == "adjust") && !self.isActivePrintJob()) {
-        editMode = "adjust-new";
+      if ((editMode == "adjust") && self.isEditingLimited()) {
+        editMode = "adjust-limited";
       }
 
       if (regionOrType.type) {
@@ -593,7 +592,7 @@ $(function() {
 
       var onDragStart;
       switch (editMode) {
-        case "first":
+        case "new":
           onDragStart = captureDragStartEventCreate;
           break;
         case "size":
@@ -602,17 +601,20 @@ $(function() {
           onDragStart = captureDragStartEventSelect;
           renderExcludeRegionsOverlay(true);
           $gcodeCanvas.on("mousemove", handleSelectMouseHover);
-          if (!self.isActivePrintJob()) {
+          if (!self.isEditingLimited()) {
             $deleteButton.show();
           }
           break;
         case "adjust":
-        case "adjust-new":
+        case "adjust-limited":
           onDragStart = captureDragStartEventSize;
           renderExcludeRegionsOverlay(true);
           $gcodeCanvas.on("mousemove", handleAdjustMouseHover);
           $acceptButton.removeClass("disabled");
-          if ((messageType != "adjust-new") && !self.isActivePrintJob()) {
+
+          // Enable the delete button if the selected region has been committed to the server and
+          // editing is not limited
+          if (selectedRegion != null && selectedRegion.id != null && !self.isEditingLimited()) {
             $deleteButton.show();
             $deleteButton.removeClass("disabled");
           }
@@ -690,31 +692,31 @@ $(function() {
             '<div class="message">'+
               '<span class="region RectangularRegion">'+
                 '<div class="label"><i class="fa fa-times-rectangle-o"></i>'+ gettext("Rectangle") +'</div>'+
-                '<span class="text first">'+
+                '<span class="text new">'+
                   '<i class="fa fa-crosshairs"></i>'+ gettext("Click to set first corner")+
                 '</span>'+
                 '<span class="text size">'+
                   '<i class="fa fa-arrows"></i>'+ gettext("Drag to adjust size")+
                 '</span>'+
-                '<span class="text adjust-new">'+
+                '<span class="text adjust">'+
                   '<i class="fa fa-arrows"></i>'+ gettext("Drag interior to reposition or border to resize")+
                 '</span>'+
-                '<span class="text adjust">'+
+                '<span class="text adjust-limited">'+
                   '<i class="fa fa-arrows"></i>'+ gettext("Drag border to resize")+
                 '</span>'+
               '</span>'+
               '<span class="region CircularRegion">'+
                 '<div class="label"><i class="fa fa-times-circle-o"></i>'+ gettext("Circle") +'</div>'+
-                '<span class="text first">'+
+                '<span class="text new">'+
                   '<i class="fa fa-dot-circle-o"></i>'+ gettext("Click to set center point")+
                 '</span>'+
                 '<span class="text size">'+
                   '<i class="fa fa-arrows"></i>'+ gettext("Drag to adjust size")+
                 '</span>'+
-                '<span class="text adjust-new">'+
+                '<span class="text adjust">'+
                   '<i class="fa fa-arrows"></i>'+ gettext("Drag interior to reposition or border to resize")+
                 '</span>'+
-                '<span class="text adjust">'+
+                '<span class="text adjust-limited">'+
                   '<i class="fa fa-arrows"></i>'+ gettext("Drag border to resize")+
                 '</span>'+
               '</span>'+
@@ -751,9 +753,9 @@ $(function() {
           // Check if button is not disabled
           if (!$button.hasClass("disabled")) {
             if ($button.hasClass("excludeRectangle")) {
-              beginEditMode("RectangularRegion", "first");
+              beginEditMode("RectangularRegion", "new");
             } else if ($button.hasClass("excludeCircle")) {
-              beginEditMode("CircularRegion", "first");
+              beginEditMode("CircularRegion", "new");
             } else if ($button.hasClass("modifyRegion")) {
               beginSelectMode();
             } else if ($button.hasClass("cancel")) {
@@ -812,7 +814,7 @@ $(function() {
     self.onEventSettingsUpdated = function() {
       console.log("onEventSettingsUpdated: settings=", self.settings);
 
-// TODO: This sorting should either happen _before_ saving (would that need to be in the python code?)
+// TODO: This sorting should happen _before_ saving (would that need to be in the python code?)
       self.extendedExcludeGcodes = self.settings.extendedExcludeGcodes.sort(
         function(a, b) {
           var uca = a.gcode().toLocaleUpperCase();
