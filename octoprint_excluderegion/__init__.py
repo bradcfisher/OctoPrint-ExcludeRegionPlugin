@@ -10,8 +10,9 @@
 
 # TODO: Setting to specify a Gcode to look for to indicate we've reached the end script and should
 #       no longer exclude moves?  Or comment pattern to search for? (but how to see the comments?)
+#       Likewise, a similar setting for determining when the start gcode has finished.
 
-# TODO: Is a setting needed for control how big a retraction is recorded as one that needs to be
+# TODO: Is a setting needed for controlling how big a retraction is recorded as one that needs to be
 #       recovered after exiting an excluded region (e.g. ignore small retractions like E-0.03)?
 #       What could a reasonable limit be for the default?
 # --
@@ -85,7 +86,7 @@ class ExcludeRegionPlugin(
     clearRegionsAfterPrintFinishes : boolean
         Whether to clear the exclusion regions after the next print completes or not.  Populated
         from the setting of the same name.
-    allowShrinkingRegionsWhilePrinting : boolean
+    mayShrinkRegionsWhilePrinting : boolean
         Whether exclude regions may be deleted or reduced in size when actively printing. Populated
         from the setting of the same name.
     _activePrintJob : boolean
@@ -94,10 +95,22 @@ class ExcludeRegionPlugin(
         GcodeHandlers instance providing the actual Gcode processing
     """
 
+    def __init__(self):
+        """
+        Declare plugin-specific properties to satisfy pylint.
+
+        The actual initialization is performed by the initialize method.
+        """
+        self._activePrintJob = None
+        self.clearRegionsAfterPrintFinishes = None
+        self.mayShrinkRegionsWhilePrinting = None
+        self.gcodeHandlers = None
+        super(ExcludeRegionPlugin, self).__init__()
+
     def initialize(self):
         """
         Perform plugin initialization.
-        
+
         This method is automatically invoked by OctoPrint when the plugin is loaded, and is called
         after all injected properties are populated.
         """
@@ -133,7 +146,7 @@ class ExcludeRegionPlugin(
         ]
 
     def getUpdateInformation(self):
-        """Return the information necessary for OctoPrint to determine if a new plugin version is available."""
+        """Return the information necessary for OctoPrint to check for new plugin versions."""
         return dict(
             excluderegion=dict(
                 displayName=__plugin_name__,
@@ -152,28 +165,29 @@ class ExcludeRegionPlugin(
         """Return a dictionary of the default plugin settings."""
         return dict(
             clearRegionsAfterPrintFinishes=False,
-            allowShrinkingRegionsWhilePrinting=False,
+            mayShrinkRegionsWhilePrinting=False,
             enteringExcludedRegionGcode=None,
             exitingExcludedRegionGcode=None,
             extendedExcludeGcodes=[
                 {
-                    "gcode" : "G4",
-                    "mode" : EXCLUDE_ALL,
-                    "description" : "Ignore all dwell commands in an excluded area to reduce " +
-                      "delays while excluding"
+                    "gcode": "G4",
+                    "mode": EXCLUDE_ALL,
+                    "description": "Ignore all dwell commands in an excluded area to reduce " +
+                                   "delays while excluding"
                 },
                 {
-                    "gcode" : "M204",
-                    "mode" : EXCLUDE_MERGE,
-                    "description" : "Record default acceleration changes while excluding and " +
-                      "apply the most recent values in a single command after exiting the " +
-                      "excluded area"
+                    "gcode": "M204",
+                    "mode": EXCLUDE_MERGE,
+                    "description": "Record default acceleration changes while excluding and " +
+                                   "apply the most recent values in a single command after " +
+                                   "exiting the excluded area"
                 },
                 {
-                    "gcode" : "M205",
-                    "mode" : EXCLUDE_MERGE,
-                    "description" : "Record advanced setting changes while excluding and apply " + 
-                      "the most recent values in a single command after exiting the excluded area"
+                    "gcode": "M205",
+                    "mode": EXCLUDE_MERGE,
+                    "description": "Record advanced setting changes while excluding and apply " +
+                                   "the most recent values in a single command after exiting the " +
+                                   "excluded area"
                 }
             ]
         )
@@ -326,7 +340,7 @@ class ExcludeRegionPlugin(
         ValueError
             If a print is currently in progress.
         """
-        if (not self.allowShrinkingRegionsWhilePrinting and self.isActivePrintJob()):
+        if (not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()):
             raise ValueError("cannot delete region while printing")
 
         if (self.gcodeHandlers.deleteRegion(idToDelete)):
@@ -349,7 +363,7 @@ class ExcludeRegionPlugin(
         """
         self.gcodeHandlers.replaceRegion(
             newRegion,
-            not self.allowShrinkingRegionsWhilePrinting and self.isActivePrintJob()
+            not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()
         )
         self.notifyExcludedRegionsChanged()
 
@@ -460,8 +474,8 @@ class ExcludeRegionPlugin(
         self.clearRegionsAfterPrintFinishes = \
             self._settings.getBoolean(["clearRegionsAfterPrintFinishes"])
 
-        self.allowShrinkingRegionsWhilePrinting = \
-            self._settings.getBoolean(["allowShrinkingRegionsWhilePrinting"])
+        self.mayShrinkRegionsWhilePrinting = \
+            self._settings.getBoolean(["mayShrinkRegionsWhilePrinting"])
 
         self.gcodeHandlers.g90InfluencesExtruder = \
             settings().getBoolean(["feature", "g90InfluencesExtruder"])
@@ -475,9 +489,9 @@ class ExcludeRegionPlugin(
         extendedExcludeGcodes = {}
         for val in self._settings.get(["extendedExcludeGcodes"]):
             val = ExcludedGcode(
-              val["gcode"],
-              val["mode"],
-              val["description"]
+                val["gcode"],
+                val["mode"],
+                val["description"]
             )
             self._logger.debug("copy extended gcode entry: %s", val)
             extendedExcludeGcodes[val.gcode] = val
@@ -485,12 +499,13 @@ class ExcludeRegionPlugin(
 
         self._logger.info(
             "Setting update detected: g90InfluencesExtruder=%s, " +
-            "clearRegionsAfterPrintFinishes=%s, allowShrinkingRegionsWhilePrinting=%s," +
+            "clearRegionsAfterPrintFinishes=%s, mayShrinkRegionsWhilePrinting=%s," +
             "enteringExcludedRegionGcode=%s, exitingExcludedRegionGcode=%s, " +
             "extendedExcludeGcodes=%s",
             self.gcodeHandlers.g90InfluencesExtruder,
-            self.clearRegionsAfterPrintFinishes, self.allowShrinkingRegionsWhilePrinting,
-            self.gcodeHandlers.enteringExcludedRegionGcode, self.gcodeHandlers.exitingExcludedRegionGcode,
+            self.clearRegionsAfterPrintFinishes, self.mayShrinkRegionsWhilePrinting,
+            self.gcodeHandlers.enteringExcludedRegionGcode,
+            self.gcodeHandlers.exitingExcludedRegionGcode,
             extendedExcludeGcodes
         )
 

@@ -215,8 +215,8 @@ $(function() {
       var isPrinting = self.printerState.isPrinting();
       var isPausing = self.printerState.isPausing();
       var isPaused = self.printerState.isPaused();
-      var allowShrinkingRegionsWhilePrinting = self.settings.allowShrinkingRegionsWhilePrinting();
-      return (isPrinting || isPaused || isPausing) && !allowShrinkingRegionsWhilePrinting;
+      var mayShrinkRegionsWhilePrinting = self.settings.mayShrinkRegionsWhilePrinting();
+      return (isPrinting || isPaused || isPausing) && !mayShrinkRegionsWhilePrinting;
     });
 
     self.excludedRegions = ko.observableArray();

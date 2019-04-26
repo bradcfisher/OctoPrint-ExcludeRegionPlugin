@@ -51,9 +51,10 @@ class RectangularRegion(CommonMixin):
         kwargs.id : string
             Unique identifier assigned to the region.
         """
+        # pylint: disable=invalid-name
         if args:
             toCopy = args[0]
-            assert isinstance(toCopy, RectangularRegion), "The value must be a RectangularRegion instance"
+            assert isinstance(toCopy, RectangularRegion), "Expected a RectangularRegion instance"
 
             self.x1 = toCopy.x1
             self.y1 = toCopy.y1

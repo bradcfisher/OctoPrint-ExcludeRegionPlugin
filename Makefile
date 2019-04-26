@@ -20,8 +20,8 @@ ACTIVATE_TESTENV=$(TESTENV)/bin/activate
 COVERAGE_DIR=$(BUILD_DIR)/coverage
 COVERAGE_FILE=$(COVERAGE_DIR)/coverage.dat
 
-PIP_CACHE_DIR=$(BUILD_DIR)/pip_cache
-PIP=pip --cache-dir $(PIP_CACHE_DIR)
+PIP_CACHE_ARGS=--cache-dir $(BUILD_DIR)/pip_cache
+PIP=pip
 
 # Configuration for the `serve` target.
 OCTOPRINT_CONFIG_DIR=~/.octoprint2
@@ -30,25 +30,30 @@ OCTOPRINT_PORT=5001
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
 	@echo "  clean                 Remove build, test and documentation artifacts"
+	@echo "  serve                 Launch OctoPrint server (port=$(OCTOPRINT_PORT), config dir=$(OCTOPRINT_CONFIG_DIR))"
 	@echo "  test                  Run all tests"
 	@echo "  coverage              Run code coverage"
 	@echo "  coverage-report       Generate code coverage reports"
-	@echo "  documentation         Generate documentation"
+	@echo "  lint                  Execute code analysis"
+	@echo "  doc                   Generate documentation"
 	@echo "  refresh-dependencies  (re)Run dependency installation"
+	@echo "  help                  This help screen"
 
 $(TESTENV):
 	$(PYTHON) -m virtualenv $(TESTENV)
+	. $(ACTIVATE_TESTENV) \
+		&& $(PIP) install --upgrade pip
 
 $(COMMON_DEPS_INSTALLED): $(TESTENV)
 	. $(ACTIVATE_TESTENV) \
-		&& $(PIP) install --upgrade -r test-requirements.txt \
-		&& $(PIP) install -e .
+		&& $(PIP) $(PIP_CACHE_ARGS) install --upgrade -r test-requirements.txt \
+		&& $(PIP) $(PIP_CACHE_ARGS) install -e .
 	touch $(COMMON_DEPS_INSTALLED)
 
 $(TESTENV_DEPS_INSTALLED): $(COMMON_DEPS_INSTALLED)
 	# pylint doesn't run with future <0.16, so we force an update beyond the version octoprint wants
 	. $(ACTIVATE_TESTENV) \
-		&& $(PIP) install --upgrade future
+		&& $(PIP) $(PIP_CACHE_ARGS) install --upgrade future
 	rm -f $(SERVE_DEPS_INSTALLED)
 	touch $(COMMON_DEPS_INSTALLED)
 	touch $(TESTENV_DEPS_INSTALLED)
@@ -56,7 +61,7 @@ $(TESTENV_DEPS_INSTALLED): $(COMMON_DEPS_INSTALLED)
 $(SERVE_DEPS_INSTALLED): $(COMMON_DEPS_INSTALLED)
 	# Resets the future version back to the one required by octoprint
 	. $(ACTIVATE_TESTENV) \
-		&& pip install octoprint
+		&& $(PIP) $(PIP_CACHE_ARGS) install octoprint
 	rm -f $(TESTENV_DEPS_INSTALLED)
 	touch $(COMMON_DEPS_INSTALLED)
 	touch $(SERVE_DEPS_INSTALLED)

@@ -1,5 +1,6 @@
 
 from __future__ import absolute_import
+from builtins import str
 import unittest
 import collections
 
@@ -17,26 +18,97 @@ class TestCase(unittest.TestCase):
         super(TestCase, self).__init__(*args, **kwargs)
         self.longMessage = True
 
-    #def assertEquals(self, a, b, msg = None):
-    #    warnings.warn("assertEquals is deprecated!", DeprecationWarning, stacklevel=2)
-    #    super(TestCase, self).assertEquals(a, b, msg)
-
-    # Ensures that only the expected properties are defined
-    def assertProperties(self, unit, expectedProperties, msg=None):
-        if (isinstance(unit, collections.Mapping)):
-            propertiesDict = unit # Already a dict
-        else:
-            propertiesDict = vars(unit)
-
-        it = unit.__class__.__name__
+    def _msg(self, value, defaultMsg, customMsg):
+        msg = defaultMsg if (customMsg is None) else customMsg
+        result = str(type(value)) + " " + str(value)
         if (msg != None):
-            it = msg +": "+ it
+            result = msg +": "+ result
+        return result
 
+    def assertIsDictionary(self, value, msg=None):
+        """
+        Ensure that the specified value is a dictionary-like collection.
+
+        Parameters
+        ----------
+        value : mixed
+            The value to test
+        msg : string | None
+            Custom assertion error message
+
+        Raises
+        ------
+        AssertionError
+            If the specified value is not a dictionary-like object.
+        """
+        if (not isinstance(value, collections.Mapping)):
+            raise AssertionError(self._msg(value, "Value is not a dictionary", msg))
+
+    def assertIsString(self, value, msg=None):
+        """
+        Ensure that the specified value is a string value (str or unicode instance).
+
+        Parameters
+        ----------
+        value : mixed
+            The value to test
+        msg : string | None
+            Custom assertion error message
+
+        Raises
+        ------
+        AssertionError
+            If the specified value is not a string.
+        """
+        if (not isinstance(value, str)):
+            raise AssertionError(self._msg(value, "Value is not a string", msg))
+
+    def assertProperties(self, value, expectedProperties, msg=None):
+        """
+        Ensure that only the expected properties are defined.
+
+        Parameters
+        ----------
+        value : mixed
+            The dictionary to test the properties for
+        expectedProperties : list
+            The property names to check
+        msg : string | None
+            Custom assertion error message
+
+        Raises
+        ------
+        AssertionError
+            If the specified value is not a dictionary, or the dictionary does not contain exactly
+            the specified property key names.
+        """
+        msg = self._msg(value, "Object properties do not match expectations", msg)
+
+        if (isinstance(value, collections.Mapping)):
+            propertiesDict = value # Already a dict
+        else:
+            propertiesDict = vars(value)
+
+        missing = []
         for property in expectedProperties:
-            self.assertTrue(property in propertiesDict, it +" should have a property named '"+ property +"'")
+            if (property not in propertiesDict):
+              missing.append(property)
 
+        unexpected = []
         for property in iter(propertiesDict):
-            self.assertTrue(property in expectedProperties, it +" has an unexpected property '"+ property +"'")
+            if (property not in expectedProperties):
+                unexpected.append(property)
+
+        if (len(missing) or len(unexpected)):
+            sep = ": "
+            if (len(missing)):
+                msg = msg + sep + "Missing properties " + str(missing)
+                sep = ", "
+
+            if (len(unexpected)):
+                msg = msg + sep + "Unexpected properties " + str(unexpected)
+
+            raise AssertionError(msg)
 
 
 # ==========

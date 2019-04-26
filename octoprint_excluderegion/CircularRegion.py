@@ -46,7 +46,7 @@ class CircularRegion(CommonMixin):
         # pylint: disable=invalid-name
         if args:
             toCopy = args[0]
-            assert isinstance(toCopy, CircularRegion), "The value must be a CircularRegion instance"
+            assert isinstance(toCopy, CircularRegion), "Expected a CircularRegion instance"
 
             self.cx = toCopy.cx
             self.cy = toCopy.cy

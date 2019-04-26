@@ -536,7 +536,10 @@ class GcodeHandlers(object):
                 returnCommands = [cmd]
 
         if (isDebug):
-            self._logger.debug("processLinearMoves: returnCommands=%s, endPosition=%s", returnCommands, self.position)
+            self._logger.debug(
+                "processLinearMoves: returnCommands=%s, endPosition=%s",
+                returnCommands, self.position
+            )
 
         if (returnCommands is None):
             returnCommands = IGNORE_GCODE_CMD
@@ -647,7 +650,7 @@ class GcodeHandlers(object):
 
         return returnCommands
 
-    def planArc(self, endX, endY, i, j, clockwise): # pylint: disable=invalid-name
+    def planArc(self, endX, endY, i, j, clockwise):  # pylint: disable=invalid-name
         """
         Compute a sequence of moves approximating an arc (G2/G3).
 
@@ -869,6 +872,7 @@ class GcodeHandlers(object):
         G2 [E<pos>] [F<rate>] R<radius> [X<pos>] [Y<pos>] [Z<pos>]
         G2 [E<pos>] [F<rate>] I<offset> J<offset> [X<pos>] [Y<pos>] [Z<pos>]
         """
+        # pylint: disable=invalid-name
         clockwise = (gcode == "G2")
         xAxis = self.position.X_AXIS
         yAxis = self.position.Y_AXIS
@@ -1063,7 +1067,7 @@ class GcodeHandlers(object):
                 elif (label == "Z"):
                     self.position.Z_AXIS.setLogicalOffsetPosition(value)
 
-    def _handle_M206(self, cmd, gcode, subcode=None):  # pylint: disable=unused-argument,invalid-name
+    def _handle_M206(self, cmd, gcode, subcode=None):  # nopep8 pylint: disable=unused-argument,invalid-name
         """
         M206 - Set home offsets.
 

@@ -7,17 +7,19 @@ import json
 from datetime import date, datetime
 
 
-def json_serial(obj):
-    """JSON serializer for objects not serializable by default json code"""
+class JsonEncoder(json.JSONEncoder):
+    """JSON encoder with logic for objects not serializable by default json code."""
 
-    toDict = getattr(obj, "toDict")
-    if (toDict is not None):
-      return toDict()
+    def default(self, obj):  # pylint: disable=W0221,E0202
+        """JSON serialization logic for objects not serializable by default json code."""
+        toDict = getattr(obj, "toDict", None)
+        if (toDict is not None):
+            return toDict()
 
-    if isinstance(obj, (datetime, date)):
-        return obj.isoformat()
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
 
-    return json.JSONEncoder.default(self, obj)
+        return json.JSONEncoder.default(self, obj)
 
 
 class CommonMixin(object):
@@ -46,7 +48,7 @@ class CommonMixin(object):
         string
             JSON representation of the dictionary returned by toDict()
         """
-        return json.dumps(self.toDict(), default=json_serial)
+        return json.dumps(self.toDict(), cls=JsonEncoder)
 
     def __repr__(self):
         """
