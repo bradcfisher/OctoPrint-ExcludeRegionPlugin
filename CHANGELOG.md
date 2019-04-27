@@ -38,7 +38,10 @@ Behavior & Compatibility:
 - Updates to G10 processing to ignore G10 if a P or L parameter is present (RepRap tool offset/temperature or workspace coordinates)
 - When exiting an excluded area, perform Z change before X/Y move if Z > current nozzle position, and after X/Y move if Z < current nozzle position
   Relates to [#7](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/7)
-
+- Updated API command processing to return appropriate HTTP status codes instead of throwing ValueError exceptions
+- To better conform to the RS274 specification, GCode parameter parsing no longer requires spaces between individual parameters (e.g. "G0X100Y100" is equivalent to "G0 X100 Y100"), and permits spaces between parameter codes and their respective values (e.g. "X   123" is interpreted the same as "X123")
+  
+  
 ## [0.1.3] - 2018-11-28
 
 ### Fixed

@@ -13,8 +13,8 @@ from .Position import Position
 # from .AxisPosition import AxisPosition
 
 REGEX_FLOAT_PATTERN = "[-+]?[0-9]*\\.?[0-9]+"
-REGEX_FLOAT_ARG = re.compile("^(?P<label>[A-Za-z])(?P<value>%s)" % REGEX_FLOAT_PATTERN)
-REGEX_SPLIT = re.compile("\\s+")
+REGEX_FLOAT_ARG = re.compile("^(?P<label>[A-Za-z])\\s*(?P<value>%s)" % REGEX_FLOAT_PATTERN)
+REGEX_SPLIT = re.compile("(?<!^)\\s*(?=[A-Za-z])")
 
 INCHES_PER_MM = 25.4
 MM_PER_ARC_SEGMENT = 1
@@ -65,9 +65,9 @@ class GcodeHandlers(object):
         Logger for outputting log messages.
     g90InfluencesExtruder : boolean
         Whether a G90 command sets absolute mode for the extruder (True) or not (False).
-    enteringExcludedRegionGcode : string | None
+    enteringExcludedRegionGcode : List of string | None
         GCode to execute when entering an excluded region.
-    exitingExcludedRegionGcode : string | None
+    exitingExcludedRegionGcode : List of string | None
         GCode to execute when leaving an excluded region
     extendedExcludeGcodes : dict of Gcode => ExcludedGcode instances
         A dict mapping Gcodes to ExcludedGcode configurations.
@@ -171,7 +171,7 @@ class GcodeHandlers(object):
             self._logger.info("New exclude region added: %s", region)
             self.excludedRegions.append(region)
         else:
-            raise ValueError("region id collision")
+            raise ValueError("Region id collision")
 
     def deleteRegion(self, regionId):
         """
@@ -229,12 +229,12 @@ class GcodeHandlers(object):
                         newRegion.containsRegion(region),
                         region.containsRegion(newRegion)
                     )
-                    raise ValueError("the new region must completely contain the original area")
+                    raise ValueError("The updated region must completely contain the original area")
 
                 self.excludedRegions[index] = newRegion
                 return
 
-        raise ValueError("specified region not found")
+        raise ValueError("Specified region not found")
 
     def isPointExcluded(self, x, y):
         """
@@ -570,7 +570,7 @@ class GcodeHandlers(object):
         if (self.enteringExcludedRegionGcode is not None):
             if (returnCommands is None):
                 returnCommands = []
-            returnCommands.append(self.enteringExcludedRegionGcode)
+            returnCommands.extend(self.enteringExcludedRegionGcode)
 
         return returnCommands
 
@@ -579,7 +579,7 @@ class GcodeHandlers(object):
         Determine the Gcode commands to execute when the tool exits an excluded region.
 
         Generated commands include recovery for a retraction initiated inside of an excluded
-        region, as well as any custom Gcode command configured for the exitingExcludedRegionGcode
+        region, as well as any custom Gcode commands configured for the exitingExcludedRegionGcode
         setting.
 
         Parameters
@@ -602,7 +602,7 @@ class GcodeHandlers(object):
             returnCommands = []
 
         if (self.exitingExcludedRegionGcode is not None):
-            returnCommands.append(self.exitingExcludedRegionGcode)
+            returnCommands.extend(self.exitingExcludedRegionGcode)
 
         if (self.pendingCommands):
             for gcode, cmdArgs in self.pendingCommands.iteritems():

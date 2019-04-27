@@ -21,6 +21,8 @@
 # --
 #
 
+# TODO: Interpret M207 / M208 - Firmware retraction settings?
+
 # TODO: Add support for multiple extruders? (gcode cmd: "T#" - selects tool #)  Each tool should
 #       have its own extruder position/axis.  What about the other axes?
 # Each tool has its own offsets and x axis position
@@ -33,6 +35,7 @@
 from __future__ import absolute_import
 
 import logging
+import re
 
 import flask
 from flask_login import current_user
@@ -55,6 +58,12 @@ __plugin_hooks__ = None
 
 EXCLUDED_REGIONS_CHANGED = "ExcludedRegionsChanged"
 
+# Regex for splitting a string containing multiple lines of Gcode
+REGEX_SPLIT_GCODE_LINES = re.compile("\\r\\n|\\n")
+
+# Regex for removing leading and trailing whitespace and comments starting with ";"
+# Example: "  M117 \"I like traffic lights\" -> "M117 \"I like traffic lights\""
+REGEX_TRIM_GCODE = re.compile("^\\s*((?:[^;\"]*?|\"(?:[^\"]|\"\")*\")*)\\s*(?:;.*)?$")
 
 # pylint: disable=global-statement
 def __plugin_load__():
@@ -207,7 +216,7 @@ class ExcludeRegionPlugin(
         current : int | None
             The settings version to migrate from (or None if there are no current settings)
         """
-        # TODO: Migrate settings from current (old) version to target (new) version
+        # There is currently no setting migration necessary
         return
 
     def isActivePrintJob(self):
@@ -289,7 +298,7 @@ class ExcludeRegionPlugin(
         self._logger.debug("API command received: %s", data)
 
         if (command == "deleteExcludeRegion"):
-            self.handleDeleteExcludeRegion(data.get("id"))
+            return self.handleDeleteExcludeRegion(data.get("id"))
         else:
             regionType = data.get("type")
 
@@ -298,16 +307,14 @@ class ExcludeRegionPlugin(
             elif (regionType == "CircularRegion"):
                 region = CircularRegion(**data)
             else:
-                raise ValueError("invalid type")
+                return "Invalid type", 400
 
             if (command == "addExcludeRegion"):
-                self.handleAddExcludeRegion(region)
+                return self.handleAddExcludeRegion(region)
             elif (command == "updateExcludeRegion"):
-                self.handleUpdateExcludeRegion(region)
-            else:
-                raise ValueError("invalid command")
+                return self.handleUpdateExcludeRegion(region)
 
-        return None
+            return "Invalid command", 400
 
     def handleAddExcludeRegion(self, region):
         """
@@ -318,13 +325,18 @@ class ExcludeRegionPlugin(
         region : Region
             The new region to add
 
-        Raises
-        ------
-        ValueError
-            If the specified region has the same id as an existing region.
+        Returns
+        -------
+        None | Tuple(string, status_code)
+            Returns None if the operation was successful, and an error status tuple if the specified
+            region has the same id as an existing region.
         """
-        self.gcodeHandlers.addRegion(region)
-        self.notifyExcludedRegionsChanged()
+        try:
+            self.gcodeHandlers.addRegion(region)
+            self.notifyExcludedRegionsChanged()
+            return None
+        except ValueError as err:
+            return err.args[0], 409
 
     def handleDeleteExcludeRegion(self, idToDelete):
         """
@@ -335,16 +347,19 @@ class ExcludeRegionPlugin(
         idToDelete : string
             The id of the region to remove.
 
-        Raises
-        ------
-        ValueError
-            If a print is currently in progress.
+        Returns
+        -------
+        None | Tuple(string, status_code)
+            Returns None if the operation was successful, and an error status tuple if the region
+            cannot be deleted.
         """
         if (not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()):
-            raise ValueError("cannot delete region while printing")
+            return "Cannot delete region while printing", 409
 
         if (self.gcodeHandlers.deleteRegion(idToDelete)):
             self.notifyExcludedRegionsChanged()
+
+        return None
 
     def handleUpdateExcludeRegion(self, newRegion):
         """
@@ -355,17 +370,22 @@ class ExcludeRegionPlugin(
         region : Region
             The new region to use as a replacement for an existing one with a matching id.
 
-        Raises
-        ------
-        ValueError
-            If the new region does not have an assigned id or a print job is active and the
-            old region is not fully contained in the new region.
+        Returns
+        -------
+        None | Tuple(string, status_code)
+            Returns None if the operation was successful, and an error status tuple if the new
+            region does not have an id or the modified region is required to fully contain the
+            original area.
         """
-        self.gcodeHandlers.replaceRegion(
-            newRegion,
-            not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()
-        )
-        self.notifyExcludedRegionsChanged()
+        try:
+            self.gcodeHandlers.replaceRegion(
+                newRegion,
+                not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()
+            )
+            self.notifyExcludedRegionsChanged()
+            return None
+        except ValueError as err:
+            return err.args[0], 409
 
     def notifyExcludedRegionsChanged(self):
         """
@@ -463,11 +483,38 @@ class ExcludeRegionPlugin(
                 or (event == Events.PRINT_CANCELLED)
                 or (event == Events.ERROR)
         ):
-            self._logger.info("Printing stopped")
+            self._logger.info("Printing stopped: event=%s", event)
             self._activePrintJob = False
             if (self.clearRegionsAfterPrintFinishes):
                 self.gcodeHandlers.resetInternalPrintState(True)
                 self.notifyExcludedRegionsChanged()
+
+    def splitGcode(self, gcodeString):
+        """
+        Split multiple lines of Gcode at line breaks and remove comments and blank lines.
+
+        Parameters
+        ----------
+        gcodeString : string
+            The Gcode string to split and sanitize
+
+        Returns
+        -------
+        List of string
+            The sanitized list of Gcode commands
+        """
+        tmp = REGEX_SPLIT_GCODE_LINES.split(gcodeString)
+
+        gcodeCommands = []
+        for gcode in tmp:
+            gcode = REGEX_TRIM_GCODE.match(gcode).group(1)
+            if (gcode != ""):
+                gcodeCommands.append(gcode)
+
+        if (not len(gcodeCommands)):
+            gcodeCommands = None
+
+        return gcodeCommands
 
     def handleSettingsUpdated(self):
         """Update internal state when a settings change is detected."""
@@ -481,10 +528,10 @@ class ExcludeRegionPlugin(
             settings().getBoolean(["feature", "g90InfluencesExtruder"])
 
         self.gcodeHandlers.enteringExcludedRegionGcode = \
-            self._settings.get(["enteringExcludedRegionGcode"])
+            self.splitGcode(self._settings.get(["enteringExcludedRegionGcode"]))
 
         self.gcodeHandlers.exitingExcludedRegionGcode = \
-            self._settings.get(["exitingExcludedRegionGcode"])
+            self.splitGcode(self._settings.get(["exitingExcludedRegionGcode"]))
 
         extendedExcludeGcodes = {}
         for val in self._settings.get(["extendedExcludeGcodes"]):
