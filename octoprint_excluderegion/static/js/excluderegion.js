@@ -1019,6 +1019,8 @@ $(function() {
         return;
       }
 
+      previousOnViewportChange = GCODE.renderer.getOptions().onViewportChange;
+      
       // Hook into the GCODE viewer to render the exclude regions
       GCODE.renderer.setOption({
         onViewportChange: function(xform) {
@@ -1027,6 +1029,10 @@ $(function() {
           editRegionOverlayContext.setTransform(xform.a, xform.b, xform.c, xform.d, xform.e, xform.f);
           renderExcludeRegionsOverlay();
           renderEditRegionOverlay();
+          // Invoke any previously registered viewport change handler to ensure we don't interfere
+          // with other plugins which may also be listening.
+          if (previousOnViewportChange)
+            previousOnViewportChange(xform);
         },
 /*
         onDragStart: function(pt) {

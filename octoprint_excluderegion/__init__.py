@@ -59,11 +59,17 @@ __plugin_hooks__ = None
 EXCLUDED_REGIONS_CHANGED = "ExcludedRegionsChanged"
 
 # Regex for splitting a string containing multiple lines of Gcode
-REGEX_SPLIT_GCODE_LINES = re.compile("\\r\\n|\\n")
+# Per RS274/NGC, line separator can be CR, LF or CRLF
+REGEX_SPLIT_GCODE_LINES = re.compile("\\r\\n|\\n|\\r")
 
 # Regex for removing leading and trailing whitespace and comments starting with ";"
-# Example: "  M117 \"I like traffic lights\" -> "M117 \"I like traffic lights\""
-REGEX_TRIM_GCODE = re.compile("^\\s*((?:[^;\"]*?|\"(?:[^\"]|\"\")*\")*)\\s*(?:;.*)?$")
+# Example: "  M117 I like traffic lights; but not when they are red" -> "M117 I like traffic lights"
+REGEX_TRIM_GCODE = re.compile("^\\s*([^;]*?)\\s*(?:;.*)?$")
+
+# The following would permit semicolons in double-quote strings, as mentioned in the RepRap GCode
+# documentation, but that doesn't seem to be supported by OctoPrint or Marlin.
+#   REGEX_TRIM_GCODE = re.compile("^\\s*((?:[^;\"]*?|\"(?:[^\"]|\"\")*\")*)\\s*(?:;.*)?$")
+# It also appears that neither Octoprint nor Marlin support comments enclosed in parenthesis
 
 # pylint: disable=global-statement
 def __plugin_load__():
@@ -489,7 +495,7 @@ class ExcludeRegionPlugin(
                 self.gcodeHandlers.resetInternalPrintState(True)
                 self.notifyExcludedRegionsChanged()
 
-    def splitGcode(self, gcodeString):
+    def splitGcodeScript(self, gcodeString):
         """
         Split multiple lines of Gcode at line breaks and remove comments and blank lines.
 
@@ -528,10 +534,10 @@ class ExcludeRegionPlugin(
             settings().getBoolean(["feature", "g90InfluencesExtruder"])
 
         self.gcodeHandlers.enteringExcludedRegionGcode = \
-            self.splitGcode(self._settings.get(["enteringExcludedRegionGcode"]))
+            self.splitGcodeScript(self._settings.get(["enteringExcludedRegionGcode"]))
 
         self.gcodeHandlers.exitingExcludedRegionGcode = \
-            self.splitGcode(self._settings.get(["exitingExcludedRegionGcode"]))
+            self.splitGcodeScript(self._settings.get(["exitingExcludedRegionGcode"]))
 
         extendedExcludeGcodes = {}
         for val in self._settings.get(["extendedExcludeGcodes"]):
