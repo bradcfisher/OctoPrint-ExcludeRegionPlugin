@@ -3,28 +3,24 @@
 
 # Thoughts on improvements:
 # - Add a way to persist the defined regions for the selected file and restore them if the file
-#   is selected again later
+#   is selected again later?
 #   - Perhaps add comments into the gcode file itself to define the regions?
 #     Could possibly add comments that could be used by the cancelobject plugin
 #   - If stored as metadata, make sure to compare file hash to ensure it's the same file data
-
-# TODO: Setting to specify a Gcode to look for to indicate we've reached the end script and should
-#       no longer exclude moves?  Or comment pattern to search for? (but how to see the comments?)
-#       Likewise, a similar setting for determining when the start gcode has finished.
-
-# TODO: Is a setting needed for controlling how big a retraction is recorded as one that needs to be
-#       recovered after exiting an excluded region (e.g. ignore small retractions like E-0.03)?
-#       What could a reasonable limit be for the default?
-# --
-# The minimum retraction distance needed to trigger retraction/recovery processing while excluding
-# minimumRetractionDistance = 0.1,
-# --
 #
-
-# TODO: Interpret M207 / M208 - Firmware retraction settings?
-
-# TODO: Add support for multiple extruders? (gcode cmd: "T#" - selects tool #)  Each tool should
-#       have its own extruder position/axis.  What about the other axes?
+# - Figure out a way to determine we've reached the end script and should no longer exclude moves?
+#   Likewise, a similar setting for determining when the start gcode has finished.
+#   Perhaps use a similar method to the Cancel Object plugin, which processes the file when it's
+#   uploaded to find specific comment markers and adds @-commands at that point
+#
+# - Is a setting needed for controlling how big a retraction is recorded as one that needs to be
+#   recovered after exiting an excluded region (e.g. ignore small retractions like E-0.03)?
+#   What could a reasonable limit be for the default?
+#
+# - Interpret M207 / M208 - Firmware retraction settings?
+#
+# - Add support for multiple extruders? (gcode cmd: "T#" - selects tool #)  Each tool should
+#   have its own extruder position/axis.  What about the other axes?
 # Each tool has its own offsets and x axis position
 # From Marlin source (Marlin_main.cpp:11201):
 #   current_position[Y_AXIS] -=
@@ -58,6 +54,10 @@ __plugin_hooks__ = None
 
 EXCLUDED_REGIONS_CHANGED = "ExcludedRegionsChanged"
 
+LOG_MODE_OCTOPRINT = "octoprint"
+LOG_MODE_DEDICATED = "dedicated"
+LOG_MODE_BOTH = "both"
+
 # Regex for splitting a string containing multiple lines of Gcode
 # Per RS274/NGC, line separator can be CR, LF or CRLF
 REGEX_SPLIT_GCODE_LINES = re.compile("\\r\\n|\\n|\\r")
@@ -70,6 +70,7 @@ REGEX_TRIM_GCODE = re.compile("^\\s*([^;]*?)\\s*(?:;.*)?$")
 # documentation, but that doesn't seem to be supported by OctoPrint or Marlin.
 #   REGEX_TRIM_GCODE = re.compile("^\\s*((?:[^;\"]*?|\"(?:[^\"]|\"\")*\")*)\\s*(?:;.*)?$")
 # It also appears that neither Octoprint nor Marlin support comments enclosed in parenthesis
+
 
 # pylint: disable=global-statement
 def __plugin_load__():
@@ -86,12 +87,11 @@ def __plugin_load__():
 
 
 class ExcludeRegionPlugin(
-        octoprint.plugin.StartupPlugin,
         octoprint.plugin.AssetPlugin,
-        octoprint.plugin.SimpleApiPlugin,
-        octoprint.plugin.EventHandlerPlugin,
+        octoprint.plugin.TemplatePlugin,
         octoprint.plugin.SettingsPlugin,
-        octoprint.plugin.TemplatePlugin
+        octoprint.plugin.SimpleApiPlugin,
+        octoprint.plugin.EventHandlerPlugin
 ):  # pylint: disable=too-many-ancestors
     """
     OctoPrint plugin adding the ability to prevent printing in rectangular or circular regions.
@@ -120,6 +120,8 @@ class ExcludeRegionPlugin(
         self.clearRegionsAfterPrintFinishes = None
         self.mayShrinkRegionsWhilePrinting = None
         self.gcodeHandlers = None
+        self._loggingMode = None
+        self._pluginLoggingHandler = None
         super(ExcludeRegionPlugin, self).__init__()
 
     def initialize(self):
@@ -133,7 +135,26 @@ class ExcludeRegionPlugin(
         self.gcodeHandlers = GcodeHandlers(self._logger)
         self.handleSettingsUpdated()
         self.notifyExcludedRegionsChanged()
+
         self._logger.debug("Plugin initialization complete")
+
+    def getUpdateInformation(self):
+        """Return the information necessary for OctoPrint to check for new plugin versions."""
+        return dict(
+            excluderegion=dict(
+                displayName=__plugin_name__,
+                displayVersion=self._plugin_version,
+
+                type="github_release",
+                user="bradcfisher",
+                repo="OctoPrint-ExcludeRegionPlugin",
+                current=self._plugin_version,
+
+                pip="https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/archive/{target_version}.zip"  # nopep8
+            )
+        )
+
+    # ~~ AssetPlugin
 
     def get_assets(self):
         """Define the static assets the plugin offers."""
@@ -154,33 +175,22 @@ class ExcludeRegionPlugin(
             css=["css/excluderegion.css"]
         )
 
+    # ~~ TemplatePlugin
+
     def get_template_configs(self):
         """Register the custom settings interface with OctoPrint."""
         return [
             dict(type="settings", custom_bindings=True)
         ]
 
-    def getUpdateInformation(self):
-        """Return the information necessary for OctoPrint to check for new plugin versions."""
-        return dict(
-            excluderegion=dict(
-                displayName=__plugin_name__,
-                displayVersion=self._plugin_version,
-
-                type="github_release",
-                user="bradcfisher",
-                repo="OctoPrint-ExcludeRegionPlugin",
-                current=self._plugin_version,
-
-                pip="https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/archive/{target_version}.zip"  # nopep8
-            )
-        )
+    # ~~ SettingsPlugin
 
     def get_settings_defaults(self):
         """Return a dictionary of the default plugin settings."""
         return dict(
             clearRegionsAfterPrintFinishes=False,
             mayShrinkRegionsWhilePrinting=False,
+            loggingMode=LOG_MODE_OCTOPRINT,
             enteringExcludedRegionGcode=None,
             exitingExcludedRegionGcode=None,
             extendedExcludeGcodes=[
@@ -225,9 +235,7 @@ class ExcludeRegionPlugin(
         # There is currently no setting migration necessary
         return
 
-    def isActivePrintJob(self):
-        """Whether a print is currently in progress or not."""
-        return self._activePrintJob
+    # ~~ SimpleApiPlugin
 
     def get_api_commands(self):
         """
@@ -321,6 +329,84 @@ class ExcludeRegionPlugin(
                 return self.handleUpdateExcludeRegion(region)
 
             return "Invalid command", 400
+
+    def on_api_get(self, request):
+        """
+        Generate response to GET request '/api/plugin/excluderegion'.
+
+        The response is encoded in JSON and has the following structure:
+
+        .. code-block:: javascript
+           {
+             "excluded_regions": [
+               {
+                 "type": "RectangularRegion",
+                 "id": "...uuid...",
+                 "x1": 1, "y1": 1, "x2": 2, "y2": 2
+               },
+               {
+                 "type": "CircularRegion",
+                 "id": "...uuid...",
+                 "cx": 1, "cy": 1, "r": 2
+               }
+               // etc ...
+             ]
+           }
+        """
+        return flask.jsonify(
+            excluded_regions=[region.toDict() for region in self.gcodeHandlers.excludedRegions]
+        )
+
+    # ~~ EventHandlerPlugin
+
+    def on_event(self, event, payload):
+        """
+        Intercept server events and perform any processing necessary.
+
+        Actions taken include:
+          - Remove all excluded regions when a new Gcode file is selected
+          - Reset the internal state when a new print is started
+          - Respond to setting updates
+          - Remove all excluded regions when printing completes (if configured to do so)
+
+        Parameters
+        ----------
+        event : string
+            The event that occurred
+
+        payload : dict
+            Additional event data
+        """
+        self._logger.debug("Event received: event=%s payload=%s", event, payload)
+
+        if (event == Events.FILE_SELECTED):
+            self._logger.info("File selected, resetting internal state")
+            self.gcodeHandlers.resetInternalPrintState(True)
+            self.notifyExcludedRegionsChanged()
+        elif (event == Events.SETTINGS_UPDATED):
+            self.handleSettingsUpdated()
+        elif (event == Events.PRINT_STARTED):
+            self._logger.info("Printing started")
+            self.gcodeHandlers.resetInternalPrintState()
+            self._activePrintJob = True
+        elif (
+                (event == Events.PRINT_DONE)
+                or (event == Events.PRINT_FAILED)
+                or (event == Events.PRINT_CANCELLING)
+                or (event == Events.PRINT_CANCELLED)
+                or (event == Events.ERROR)
+        ):
+            self._logger.info("Printing stopped: event=%s", event)
+            self._activePrintJob = False
+            if (self.clearRegionsAfterPrintFinishes):
+                self.gcodeHandlers.resetInternalPrintState(True)
+                self.notifyExcludedRegionsChanged()
+
+    # ~~ ExcludeRegionPlugin
+
+    def isActivePrintJob(self):
+        """Whether a print is currently in progress or not."""
+        return self._activePrintJob
 
     def handleAddExcludeRegion(self, region):
         """
@@ -425,77 +511,8 @@ class ExcludeRegionPlugin(
             )
         )
 
-    def on_api_get(self, request):
-        """
-        Generate response to GET request '/api/plugin/excluderegion'.
-
-        The response is encoded in JSON and has the following structure:
-
-        .. code-block:: javascript
-           {
-             "excluded_regions": [
-               {
-                 "type": "RectangularRegion",
-                 "id": "...uuid...",
-                 "x1": 1, "y1": 1, "x2": 2, "y2": 2
-               },
-               {
-                 "type": "CircularRegion",
-                 "id": "...uuid...",
-                 "cx": 1, "cy": 1, "r": 2
-               }
-               // etc ...
-             ]
-           }
-        """
-        return flask.jsonify(
-            excluded_regions=[region.toDict() for region in self.gcodeHandlers.excludedRegions]
-        )
-
-    def on_event(self, event, payload):
-        """
-        Intercept server events and perform any processing necessary.
-
-        Actions taken include:
-          - Remove all excluded regions when a new Gcode file is selected
-          - Reset the internal state when a new print is started
-          - Respond to setting updates
-          - Remove all excluded regions when printing completes (if configured to do so)
-
-        Parameters
-        ----------
-        event : string
-            The event that occurred
-
-        payload : dict
-            Additional event data
-        """
-        self._logger.debug("Event received: event=%s payload=%s", event, payload)
-
-        if (event == Events.FILE_SELECTED):
-            self._logger.info("File selected, resetting internal state")
-            self.gcodeHandlers.resetInternalPrintState(True)
-            self.notifyExcludedRegionsChanged()
-        elif (event == Events.SETTINGS_UPDATED):
-            self.handleSettingsUpdated()
-        elif (event == Events.PRINT_STARTED):
-            self._logger.info("Printing started")
-            self.gcodeHandlers.resetInternalPrintState()
-            self._activePrintJob = True
-        elif (
-                (event == Events.PRINT_DONE)
-                or (event == Events.PRINT_FAILED)
-                or (event == Events.PRINT_CANCELLING)
-                or (event == Events.PRINT_CANCELLED)
-                or (event == Events.ERROR)
-        ):
-            self._logger.info("Printing stopped: event=%s", event)
-            self._activePrintJob = False
-            if (self.clearRegionsAfterPrintFinishes):
-                self.gcodeHandlers.resetInternalPrintState(True)
-                self.notifyExcludedRegionsChanged()
-
-    def splitGcodeScript(self, gcodeString):
+    @staticmethod
+    def splitGcodeScript(gcodeString):
         """
         Split multiple lines of Gcode at line breaks and remove comments and blank lines.
 
@@ -509,6 +526,9 @@ class ExcludeRegionPlugin(
         List of string
             The sanitized list of Gcode commands
         """
+        if (gcodeString is None):
+            return None
+
         tmp = REGEX_SPLIT_GCODE_LINES.split(gcodeString)
 
         gcodeCommands = []
@@ -517,10 +537,53 @@ class ExcludeRegionPlugin(
             if (gcode != ""):
                 gcodeCommands.append(gcode)
 
-        if (not len(gcodeCommands)):
+        if (not gcodeCommands):
             gcodeCommands = None
 
         return gcodeCommands
+
+    def setLoggingMode(self, loggingMode):
+        """
+        Set a new logging mode for the plugin.
+
+        Parameters
+        ----------
+        loggingMode : String
+            The new logging mode to apply.  May be one of LOG_MODE_OCTOPRINT, LOG_MODE_DEDICATED,
+            or LOG_MODE_BOTH.
+        """
+        if (self._loggingMode == loggingMode):
+            return
+
+        if (self._loggingMode is not None):
+            # Write a message to the previous log if a mode has been previously set
+            self._logger.info(
+                "Changing logging mode from '%s' to '%s'",
+                self._loggingMode, loggingMode
+            )
+
+        if (loggingMode in (LOG_MODE_DEDICATED, LOG_MODE_BOTH)):
+            if (self._pluginLoggingHandler is None):
+                self._pluginLoggingHandler = logging.handlers.RotatingFileHandler(
+                    self._settings.get_plugin_logfile_path(),
+                    maxBytes=2*1024*1024,
+                    backupCount=3
+                )
+                self._pluginLoggingHandler.setFormatter(
+                    logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
+                )
+                self._pluginLoggingHandler.setLevel(logging.DEBUG)
+
+            self._logger.addHandler(self._pluginLoggingHandler)
+            self._logger.propagate = (loggingMode == LOG_MODE_BOTH)
+        elif (self._pluginLoggingHandler is not None):  # LOG_MODE_OCTOPRINT
+            self._logger.removeHandler(self._pluginLoggingHandler)
+            self._logger.propagate = True
+
+        self._loggingMode = loggingMode
+
+        # Write a message to the new log
+        self._logger.info("Logging mode set to '%s'", self._loggingMode)
 
     def handleSettingsUpdated(self):
         """Update internal state when a settings change is detected."""
@@ -546,17 +609,20 @@ class ExcludeRegionPlugin(
                 val["mode"],
                 val["description"]
             )
-            self._logger.debug("copy extended gcode entry: %s", val)
             extendedExcludeGcodes[val.gcode] = val
         self.gcodeHandlers.extendedExcludeGcodes = extendedExcludeGcodes
 
+        self.setLoggingMode(self._settings.get(["loggingMode"]))
+
         self._logger.info(
             "Setting update detected: g90InfluencesExtruder=%s, " +
-            "clearRegionsAfterPrintFinishes=%s, mayShrinkRegionsWhilePrinting=%s," +
+            "clearRegionsAfterPrintFinishes=%s, mayShrinkRegionsWhilePrinting=%s, " +
+            "loggingMode=%s, " +
             "enteringExcludedRegionGcode=%s, exitingExcludedRegionGcode=%s, " +
             "extendedExcludeGcodes=%s",
             self.gcodeHandlers.g90InfluencesExtruder,
             self.clearRegionsAfterPrintFinishes, self.mayShrinkRegionsWhilePrinting,
+            self._loggingMode,
             self.gcodeHandlers.enteringExcludedRegionGcode,
             self.gcodeHandlers.exitingExcludedRegionGcode,
             extendedExcludeGcodes

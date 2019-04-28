@@ -1,19 +1,17 @@
 <h4>General Settings</h4>
 
 <form class="form-horizontal">
-  <div class="control-group" title="{{ _('Whether to clear any defined exclude regions by default when printing completes') }}">
-    <div class="controls">
+  <div class="control-group">
+    <div class="controls" title="{{ _('Whether to clear any defined exclude regions by default when printing completes') }}">
       <label class="checkbox">
         <input type="checkbox" data-bind="checked: settings.clearRegionsAfterPrintFinishes">
         {{ _('Clear Exclude Regions when Print Completes') }}
       </label>
     </div>
-  </div>
 
-  <div class="control-group" title="{{ _('Whether exclude regions may be deleted or reduced in size when actively printing') }}">
-    <div class="controls">
+    <div class="controls" title="{{ _('Whether exclude regions may be deleted or reduced in size when actively printing') }}">
       <label class="checkbox">
-        <input type="checkbox" data-bind="checked: settings.allowShrinkingRegionsWhilePrinting">
+        <input type="checkbox" data-bind="checked: settings.mayShrinkRegionsWhilePrinting">
         {{ _('Allow Deleting or Shrinking Regions while Printing') }}
       </label>
     </div>
@@ -30,6 +28,17 @@
     <label class="control-label" for="settings-excluderegion-exitRegionGcode">{{ _('Exit Exclude Region Gcode') }}</label>
     <div class="controls">
       <textarea class="input-block-level" data-bind="value: settings.exitingExcludedRegionGcode" id="settings-excluderegion-exitRegionGcode"></textarea>
+    </div>
+  </div>
+
+  <div class="control-group" title="{{ _('Whether to write to a plugin-specific log file, or just use the general OctorPrint log') }}">
+    <label class="control-label" for="settings-excluderegion-loggingMode">{{ _('Logging Mode') }}</label>
+    <div class="controls">
+      <select data-bind="value: settings.loggingMode" class="input-block-level" title="{{ _('Whether to log to the OctoPrint log, a dedicated plugin log, or both') }}">
+        <option value="octoprint">{{ _('Use OctoPrint log file') }}</option>
+        <option value="dedicated">{{ _('Use dedicated plugin log file') }}</option>
+        <option value="both">{{ _('Log to both') }}</option>
+      </select>
     </div>
   </div>
 </form>
@@ -81,4 +90,3 @@
     </div>
   </div>
 </div>
-

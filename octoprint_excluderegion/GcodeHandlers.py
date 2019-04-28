@@ -785,10 +785,8 @@ class GcodeHandlers(object):
         """
         if (self._logger.isEnabledFor(logging.DEBUG)):
             self._logger.debug(
-                "_handleOtherGcode: cmd=%s, gcode=%s, subcode=%s " +
-                "(excluding=%s, extendedExcludeGcodes=%s)",
-                cmd, gcode, subcode,
-                self.excluding, self.extendedExcludeGcodes
+                "_handleOtherGcode: cmd=%s, gcode=%s, subcode=%s (excluding=%s)",
+                cmd, gcode, subcode, self.excluding
             )
 
         if (gcode and self.excluding):
