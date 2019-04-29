@@ -26,7 +26,8 @@ PIP=pip
 
 TEST_PATTERN=$(or $(PATTERN),test*.py)
 UNITTEST=-m unittest discover -v --pattern $(TEST_PATTERN)
-LINT_FILES=$(if $(filter undefined,$(origin PATTERN)),$(SOURCE_DIR),$(shell find $(SOURCE_DIR) -type f -name "$(PATTERN)"))
+LINT_SOURCE_FILES=$(if $(filter undefined,$(origin PATTERN)),$(SOURCE_DIR),$(shell find $(SOURCE_DIR) -type f -name "$(PATTERN)"))
+LINT_TEST_FILES=$(if $(filter undefined,$(origin PATTERN)),$(TEST_DIR),$(shell find $(TEST_DIR) -type f -name "$(PATTERN)"))
 
 # Configuration for the `serve` target.
 OCTOPRINT_CONFIG_DIR=~/.octoprint2
@@ -129,8 +130,12 @@ doc: $(TESTENV_DEPS_INSTALLED) $(SOURCE_FILES) $(DOC_FILES)
 	rm -rf $(BUILD_DIR)/doc
 	. $(ACTIVATE_TESTENV) && sphinx-build -b html doc $(BUILD_DIR)/doc
 
-lint: $(TESTENV_DEPS_INSTALLED) $(SOURCE_FILES) $(TEST_FILES)
-	. $(ACTIVATE_TESTENV) && pylama $(LINT_FILES)
-	#--report $(BUILD_DIR)/pylama_report.txt
+lint: lint-source lint-tests
 
-.PHONY: help clean test serve clear-deps-installed refresh-dependencies coverage coverage-report clean-coverage-report check-coverage-pattern doc lint
+lint-source: $(TESTENV_DEPS_INSTALLED) $(SOURCE_FILES) $(TEST_FILES)
+	-. $(ACTIVATE_TESTENV) && pylama $(LINT_SOURCE_FILES)
+
+lint-tests: $(TESTENV_DEPS_INSTALLED) $(SOURCE_FILES) $(TEST_FILES)
+	-. $(ACTIVATE_TESTENV) && pylama $(LINT_TEST_FILES)
+
+.PHONY: help clean test serve clear-deps-installed refresh-dependencies coverage coverage-report clean-coverage-report check-coverage-pattern doc lint lint-source lint-tests

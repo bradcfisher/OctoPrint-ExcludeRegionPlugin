@@ -4,8 +4,9 @@
 from __future__ import absolute_import
 from .CommonMixin import CommonMixin
 
-# TODO: Implement physical limits (min/max) & software endstop limits? update_software_endstops?
-# TODO: Support homing to specific offset (baseHomePos?, e.g. home to center of cartesian), or
+# Possible enhancements:
+#   - Implement physical limits (min/max) & software endstop limits? update_software_endstops?
+#   - Support homing to specific offset (baseHomePos?, e.g. home to center of cartesian), or
 #       homing to max instead of min?
 
 

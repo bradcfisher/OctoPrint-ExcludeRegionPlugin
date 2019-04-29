@@ -1,0 +1,2 @@
+# This file exists to suppress the "No config file found" warning.
+# Configuration for pylint should be done in pylama.ini

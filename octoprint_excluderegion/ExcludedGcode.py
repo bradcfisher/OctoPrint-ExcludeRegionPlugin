@@ -40,6 +40,10 @@ class ExcludedGcode(CommonMixin):
         description : string
             Description of the exclusion.
         """
+        assert gcode, "You must provide a value for gcode"
+        assert mode in (EXCLUDE_ALL, EXCLUDE_EXCEPT_FIRST, EXCLUDE_EXCEPT_LAST, EXCLUDE_MERGE), \
+            "Invalid mode parameter value"
+
         self.gcode = gcode
         self.mode = mode
         self.description = description

@@ -51,14 +51,13 @@ class RetractionState(CommonMixin):
                     "firmwareRetract is specified"
                 )
         elif (not nonFirmwareRetract):
-            if ((extrusionAmount is None) or (feedRate is None)):
-                raise ValueError(
-                    "You must provide values for both extrusionAmount and feedRate together"
-                )
-            else:
-                raise ValueError(
-                    "You must provide a value for firmwareRetract or extrusionAmount and feedRate"
-                )
+            raise ValueError(
+                "You must provide a value for firmwareRetract or extrusionAmount and feedRate"
+            )
+        elif ((extrusionAmount is None) or (feedRate is None)):
+            raise ValueError(
+                "You must provide values for both extrusionAmount and feedRate together"
+            )
 
         self.recoverExcluded = False
         self.firmwareRetract = firmwareRetract

@@ -1,12 +1,16 @@
+# coding=utf-8
+"""Provides an enhanced TestCase class to extend when implementing unit tests."""
 
 from __future__ import absolute_import
 from builtins import str
+
 import unittest
 import collections
-
 import warnings
 
+
 class TestCase(unittest.TestCase):
+    """Enhanced untttest.TestCase subclass providing additional asserts and deprecation warnings."""
 
     def __init__(self, *args, **kwargs):
         """
@@ -18,11 +22,12 @@ class TestCase(unittest.TestCase):
         super(TestCase, self).__init__(*args, **kwargs)
         self.longMessage = True
 
-    def _msg(self, value, defaultMsg, customMsg):
+    @staticmethod
+    def _msg(value, defaultMsg, customMsg):
         msg = defaultMsg if (customMsg is None) else customMsg
         result = str(type(value)) + " " + str(value)
-        if (msg != None):
-            result = msg +": "+ result
+        if (msg is not None):
+            result = msg + ": " + result
         return result
 
     def assertIsDictionary(self, value, msg=None):
@@ -85,27 +90,27 @@ class TestCase(unittest.TestCase):
         msg = self._msg(value, "Object properties do not match expectations", msg)
 
         if (isinstance(value, collections.Mapping)):
-            propertiesDict = value # Already a dict
+            propertiesDict = value  # Already a dict
         else:
             propertiesDict = vars(value)
 
         missing = []
-        for property in expectedProperties:
-            if (property not in propertiesDict):
-              missing.append(property)
+        for prop in expectedProperties:
+            if (prop not in propertiesDict):
+                missing.append(prop)
 
         unexpected = []
-        for property in iter(propertiesDict):
-            if (property not in expectedProperties):
-                unexpected.append(property)
+        for prop in iter(propertiesDict):
+            if (prop not in expectedProperties):
+                unexpected.append(prop)
 
-        if (len(missing) or len(unexpected)):
+        if (missing or unexpected):
             sep = ": "
-            if (len(missing)):
+            if (missing):
                 msg = msg + sep + "Missing properties " + str(missing)
                 sep = ", "
 
-            if (len(unexpected)):
+            if (unexpected):
                 msg = msg + sep + "Unexpected properties " + str(unexpected)
 
             raise AssertionError(msg)
@@ -114,20 +119,30 @@ class TestCase(unittest.TestCase):
 # ==========
 # Ensure calling any of the deprecated assertion methods actually raises a deprecation warning
 
-deprecatedMethods = [
+DEPRECATED_METHODS = [
     "assertEquals", "failIfEqual", "failUnless", "assert_",
     "failIf", "failUnlessRaises", "failUnlessAlmostEqual", "failIfAlmostEqual"
 ]
 
-def createDeprecationClosure(deprecatedMethod, origFn):
-    def deprecationClosure(self, *args, **kwargs):
-        warnings.warn("TestCase."+ deprecatedMethod +" is deprecated", DeprecationWarning, stacklevel=2)
-        origFn(self, *args, **kwargs)
 
-    deprecationClosure.__name__ = deprecatedMethod
-    return deprecationClosure
+def _apply_deprecation_closures():
+    def _create_deprecation_closure(deprecatedMethod, origFn):
+        def deprecation_closure(self, *args, **kwargs):
+            warnings.warn(
+                "TestCase." + deprecatedMethod + " is deprecated", DeprecationWarning, stacklevel=2
+            )
+            origFn(self, *args, **kwargs)
 
-for deprecatedMethod in deprecatedMethods:
-    if (hasattr(TestCase, deprecatedMethod)):
-        setattr(TestCase, deprecatedMethod,
-            createDeprecationClosure(deprecatedMethod, getattr(TestCase, deprecatedMethod)))
+        deprecation_closure.__name__ = deprecatedMethod
+        return deprecation_closure
+
+    for deprecatedMethod in DEPRECATED_METHODS:
+        if (hasattr(TestCase, deprecatedMethod)):
+            setattr(
+                TestCase,
+                deprecatedMethod,
+                _create_deprecation_closure(deprecatedMethod, getattr(TestCase, deprecatedMethod))
+            )
+
+
+_apply_deprecation_closures()
