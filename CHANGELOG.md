@@ -37,6 +37,8 @@ modularized and updated to follow common Python code formatting and quality stan
   > Resolves [#19](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/19),
              [#20](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/20)
   > Relates to [#24](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/24)
+- Add setting for custom GCode script to execute when entering an excluded region
+- Add setting for custom GCode script to execute when exiting an excluded region
 - Added a setting to control where log messages from the plugin are written.  May be set to log to
   a dedicated plugin log file, the normal octoprint log, or both.
   > Relates to [#26](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/26)
@@ -47,8 +49,12 @@ modularized and updated to follow common Python code formatting and quality stan
   3) Last (only the last command encountered is executed when leaving excluded area)
   4) Merge (args of each command found are are merged, retaining last value for each arg) and
      execute one combined command when leaving excluded area (e.g. M204)
-- Add setting for custom GCode script to execute when entering an excluded region
-- Add setting for custom GCode script to execute when exiting an excluded region
+- Added a way to configure actions to perform when specific @-commands are encountered.  Useful for
+  preventing the plugin from affecting start or end Gcode scripts.  Currently supported actions are:
+  1) Enable exclusion - Causes the plugin to enforce any defined exclusion regions for subsequent
+     Gcode commands.
+  2) Disable exclusion - Disables exclusion processing for subsequent Gcode commands, and ends any
+     exclusion that is currently occurring.
 
 **Behavior & Compatibility**
 

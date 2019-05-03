@@ -90,3 +90,50 @@
     </div>
   </div>
 </div>
+
+<h4>@-Command Actions</h4>
+
+<div class="table table-condensed container-fluid">
+  <div>
+    <div class="row-fluid">
+      <h5 class="span2" title="{{ _('Name of the @-Command that should trigger the action') }}">{{ _('Command') }}</h5>
+      <h5 class="span2" title="{{ _('Regular expression pattern to match against command parameters') }}">{{ _('Parameter Pattern') }}</h5>
+      <h5 class="span2">{{ _('Action') }}</h5>
+      <h5 class="span4">{{ _('Description') }}</h5>
+      <h5 class="span2"></h5>
+    </div>
+  </div>
+  <div data-bind="foreach: settings.atCommandActions">
+    <div data-bind="attr: {title: command}" class="row-fluid">
+      <span class="span2" data-bind="text: command"></span>
+      <span class="span2"><input type="text" class="input-small" data-bind="value: parameterPattern, attr: {title: parameterPattern}"/></span>
+      <span class="span2">
+        <select data-bind="value: action" class="input-small" title="{{ _('Action') }}">
+          <option value="enable_exclusion">{{ _('Enable Exclusion') }}</option>
+          <option value="disable_exclusion">{{ _('Disable Exclusion') }}</option>
+        </select>
+      </span>
+      <span class="span4"><input type="text" class="span12" data-bind="value: description, attr: {title: description}"/></span>
+      <span class="span2">
+        <a href="#" class="btn btn-mini icon-trash" data-bind="click: $parent.removeAtCommandAction" title="{{ _('Remove entry') }}"></a>
+      </span>
+    </div>
+  </div>
+  <div>
+    <div class="row-fluid">
+      <span class="span2"><input type="text" class="input-small" title="{{ _("Command") }}" id="settings-excluderegion_newAtCommand"/></span>
+      <span class="span2"><input type="text" class="input-small" id="settings-excluderegion_newAtCommandParameterPattern"/></span>
+      <span class="span2">
+        <select class="input-small" title="{{ _('Action') }}" id="settings-excluderegion_newAtCommandAction">
+          <option value="enable_exclusion">{{ _('Enable Exclusion') }}</option>
+          <option value="disable_exclusion">{{ _('Disable Exclusion') }}</option>
+        </select>
+      </span>
+      <span class="span4"><input type="text" class="span12" title="{{ _("Description") }}" id="settings-excluderegion_newAtCommandDescription"/></span>
+      <span class="span2 btn-group">
+<!-- TODO: Disable this button if the command value is blank or all spaces -->
+        <a href="#" class="btn btn-mini icon-plus" data-bind="click: addAtCommandAction" title="{{ _('Add entry') }}"></a>
+      </span>
+    </div>
+  </div>
+</div>

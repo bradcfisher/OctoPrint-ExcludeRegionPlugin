@@ -6,11 +6,12 @@ from __future__ import absolute_import
 import logging
 import re
 import math
+import time
 
 from .RetractionState import RetractionState
 from .ExcludedGcode import EXCLUDE_EXCEPT_FIRST, EXCLUDE_EXCEPT_LAST, EXCLUDE_MERGE
+from .AtCommandAction import ENABLE_EXCLUSION, DISABLE_EXCLUSION
 from .Position import Position
-# from .AxisPosition import AxisPosition
 
 REGEX_FLOAT_PATTERN = "[-+]?[0-9]*\\.?[0-9]+"
 REGEX_FLOAT_ARG = re.compile("^(?P<label>[A-Za-z])\\s*(?P<value>%s)" % REGEX_FLOAT_PATTERN)
@@ -71,6 +72,8 @@ class GcodeHandlers(object):
         GCode to execute when leaving an excluded region
     extendedExcludeGcodes : dict of Gcode => ExcludedGcode instances
         A dict mapping Gcodes to ExcludedGcode configurations.
+    atCommandActions : dict of At-Command => List of AtCommandAcion instances
+        A dict mapping At-Commands to AtCommandAction instances.
     excludedRegions : List of Region
         The currently defined exclusion regions.
     position : Position
@@ -80,8 +83,17 @@ class GcodeHandlers(object):
     feedRateUnitMultiplier : float
         Unit multiplier to apply to feed rate for converting logical units (inches, etc) to native
         units (mm).
+    _exclusionEnabled : boolean
+        Whether exclusion is currently enabled or not (default True/enabled).  May be controlled
+        through At-Commands embedded in the Gcode file or sent via terminal.
     excluding : boolean
         Whether currently in an excluded area or not.
+    excludeStartTime : float
+        The timstamp when the current exclusion region was entered
+    numCommands : int
+        The number of Gcode commands that have been intercepted for the current exclusion region
+    numExcludedCommands : int
+        The number of Gcode commands that have been excluded for the current exclusion region
     lastRetraction : RetractionState | None
         Retraction that may need to be recovered.
     lastPosition : Position | None
@@ -107,6 +119,7 @@ class GcodeHandlers(object):
         self.enteringExcludedRegionGcode = None
         self.exitingExcludedRegionGcode = None
         self.extendedExcludeGcodes = {}
+        self.atCommandActions = {}
 
         self.resetInternalPrintState(True)
 
@@ -128,7 +141,11 @@ class GcodeHandlers(object):
         self.position = Position()
         self.feedRate = 0
         self.feedRateUnitMultiplier = 1
+        self._exclusionEnabled = True
         self.excluding = False
+        self.excludeStartTime = None
+        self.numExcludedCommands = 0
+        self.numCommands = 0
         self.lastRetraction = None
         self.lastPosition = None
         self.pendingCommands = {}
@@ -252,11 +269,59 @@ class GcodeHandlers(object):
         boolean
             True if the point is contained within a defined exclude region, False otherwise.
         """
-        for region in self.excludedRegions:
-            if (region.containsPoint(x, y)):
-                return True
+        if (self._exclusionEnabled):
+            for region in self.excludedRegions:
+                if (region.containsPoint(x, y)):
+                    return True
 
         return False
+
+    def isExclusionEnabled(self):
+        """Whether exclusion is currently enabled (True) or disabled (False)."""
+        return self._exclusionEnabled
+
+    def disableExclusion(self, context):
+        """
+        Disable exclusion processing.
+
+        Parameters
+        ----------
+        context : string
+            Context string (generally an At-Command) to include in log output.
+
+        Returns
+        -------
+        List of Gcode commands
+            The Gcode command(s) to execute, if any.  It is up to the caller to ensure these
+            commands are sent to the printer.
+        """
+        returnCommands = []
+        if (self._exclusionEnabled):
+            self._logger.info("Exclusion disabled: context=%s", context)
+            self._exclusionEnabled = False
+
+            # If exclusion was disabled, stop any current exclusion
+            if (self.excluding):
+                returnCommands = self.exitExcludedRegion(context, returnCommands)
+        else:
+            self._logger.debug("Exclusion already disabled, NOP: context=%s", context)
+
+        return returnCommands
+
+    def enableExclusion(self, context):
+        """
+        Enable exclusion processing.
+
+        Parameters
+        ----------
+        context : string
+            Context string (generally an At-Command) to include in log output.
+        """
+        if (not self._exclusionEnabled):
+            self._logger.info("Exclusion enabled: context=%s", context)
+            self._exclusionEnabled = True
+        else:
+            self._logger.debug("Exclusion already enabled, NOP: context=%s", context)
 
     def isAnyPointExcluded(self, *xyPairs):
         """
@@ -275,18 +340,19 @@ class GcodeHandlers(object):
         boolean
             True if any point in the list is contained in an excluded region, False otherwise.
         """
-        xAxis = self.position.X_AXIS
-        yAxis = self.position.Y_AXIS
         exclude = False
 
-        for index in range(0, len(xyPairs), 2):
-            x = xAxis.setLogicalPosition(xyPairs[index])
-            y = yAxis.setLogicalPosition(xyPairs[index + 1])
+        if (self._exclusionEnabled):
+            xAxis = self.position.X_AXIS
+            yAxis = self.position.Y_AXIS
 
-            if (not exclude and self.isPointExcluded(x, y)):
-                exclude = True
+            for index in range(0, len(xyPairs), 2):
+                x = xAxis.setLogicalPosition(xyPairs[index])
+                y = yAxis.setLogicalPosition(xyPairs[index + 1])
 
-        self._logger.debug("isAnyPointExcluded: pt=%s,%s: %s", x, y, exclude)
+                if (not exclude and self.isPointExcluded(x, y)):
+                    exclude = True
+
         return exclude
 
     def recordRetraction(self, retract, returnCommands):
@@ -542,7 +608,7 @@ class GcodeHandlers(object):
             )
 
         if (returnCommands is None):
-            returnCommands = IGNORE_GCODE_CMD
+            returnCommands = self.ignoreGcodeCommand()
 
         return returnCommands
 
@@ -563,9 +629,14 @@ class GcodeHandlers(object):
         List of Gcode commands
             The Gcode command(s) to execute, if any.
         """
+        assert self._exclusionEnabled, "Exclusion is disabled"
+
         self.excluding = True
+        self.excludeStartTime = time.time()
+        self.numExcludedCommands = 0
+        self.numCommands = 0
         self.lastPosition = Position(self.position)
-        self._logger.debug("START excluding: cmd=%s", cmd)
+        self._logger.info("START excluding: cmd=%s", cmd)
 
         if (self.enteringExcludedRegionGcode is not None):
             if (returnCommands is None):
@@ -585,7 +656,8 @@ class GcodeHandlers(object):
         Parameters
         ----------
         cmd : string
-            The Gcode command that caused the tool to exit the excluded region.
+            The Gcode command that caused the tool to exit the excluded region, used for logging.
+            May be an At-Command if triggered as a result of disabling exclusion.
         returnCommands : List of Gcode commands | None
             The Gcode command list to append any new command(s) to.  If None, a new list will be
             created.
@@ -643,9 +715,11 @@ class GcodeHandlers(object):
             # (hopefully we avoided hitting any part we may pass over)
             returnCommands.append(moveZcmd)
 
-        self._logger.debug(
-            "STOP excluding: cmd=%s, returnCommands=%s",
-            cmd, returnCommands
+        self._logger.info(
+            "STOP excluding: cmd=%s, returnCommands=%s, numCommands=%s, numExcludedCommands=%s, " +
+            "elapsed seconds=%s",
+            cmd, returnCommands, self.numCommands, self.numExcludedCommands,
+            time.time() - self.excludeStartTime
         )
 
         return returnCommands
@@ -742,6 +816,11 @@ class GcodeHandlers(object):
         if (self.g90InfluencesExtruder):
             self.position.setExtruderAbsoluteMode(absolute)
 
+    def ignoreGcodeCommand(self):
+        """Add one to the excluded Gcode count and return IGNORE_GCODE_CMD."""
+        self.numExcludedCommands += 1
+        return IGNORE_GCODE_CMD
+
     def handleGcode(self, cmd, gcode, subcode=None):
         """
         Inspects the provided gcode command and performs any necessary processing.
@@ -761,6 +840,7 @@ class GcodeHandlers(object):
             If the command should be processed normally, returns None, otherwise returns one or
             more Gcode commands to execute instead or IGNORE_GCODE_CMD to prevent processing.
         """
+        self.numCommands += 1
         method = getattr(self, "_handle_" + gcode, self._handleOtherGcode)
         return method(cmd, gcode, subcode)
 
@@ -816,7 +896,7 @@ class GcodeHandlers(object):
                     elif (mode == EXCLUDE_EXCEPT_LAST):
                         self.pendingCommands[gcode] = cmd
 
-                    return IGNORE_GCODE_CMD
+                    return self.ignoreGcodeCommand()
 
         # Otherwise, let the command process normally
         return None
@@ -973,7 +1053,7 @@ class GcodeHandlers(object):
         )
 
         if (returnCommands is None):
-            return IGNORE_GCODE_CMD
+            return self.ignoreGcodeCommand()
 
         return returnCommands
 
@@ -985,7 +1065,7 @@ class GcodeHandlers(object):
         """
         returnCommands = self.recoverRetractionIfNeeded(None, cmd, True)
         if (returnCommands is None):
-            return IGNORE_GCODE_CMD
+            return self.ignoreGcodeCommand()
 
         return returnCommands
 
@@ -1083,3 +1163,35 @@ class GcodeHandlers(object):
                     self.position.Y_AXIS.setHomeOffset(value)
                 elif (label == "Z"):
                     self.position.Z_AXIS.setHomeOffset(value)
+
+    def handleAtCommand(self, comm_instance, cmd, parameters):  # pylint: disable=invalid-name
+        """
+        Process registered At-Command actions.
+
+        Parameters
+        ----------
+        comm_instance : octoprint.util.comm.MachineCom
+            The MachineCom instance to use for sending any Gcode commands produced
+        cmd : string
+            The At-Command that was encountered
+        parameters : string
+            The parameters provided for the At-Command
+        """
+        entries = self.atCommandActions.get(cmd)
+        if (entries is not None):
+            for entry in entries:
+                if (entry.matches(cmd, parameters)):
+                    self._logger.debug(
+                        "handleAtCommand: processing At-Command: action=%s, cmd=%s, parameters=%s",
+                        entry.action, cmd, parameters
+                    )
+
+                    if (entry.action == ENABLE_EXCLUSION):
+                        self.enableExclusion(cmd + " " + parameters)
+                    elif (entry.action == DISABLE_EXCLUSION):
+                        for command in self.disableExclusion(cmd + " " + parameters):
+                            self._logger.debug(
+                                "handleAtCommand: sending Gcode command to printer: cmd=%s",
+                                command
+                            )
+                            comm_instance.sendCommand(command)

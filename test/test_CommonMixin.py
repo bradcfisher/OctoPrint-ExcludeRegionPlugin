@@ -4,6 +4,7 @@
 from __future__ import absolute_import
 
 import json
+import re
 from datetime import date, datetime
 from octoprint_excluderegion.CommonMixin import CommonMixin, JsonEncoder
 from .utils import TestCase
@@ -51,6 +52,9 @@ class CommonMixinTests(TestCase):  # pylint: disable=too-many-instance-attribute
             "date": self.testDate2String,
             "string": self.testDate2String
         }
+
+        self.testRegexPatternString = "abc"
+        self.testRegex = re.compile(self.testRegexPatternString)
 
     def test_toDict(self):
         """Test the toDict method."""
@@ -147,3 +151,8 @@ class CommonMixinTests(TestCase):  # pylint: disable=too-many-instance-attribute
         """Test that the JsonEncoder encodes date times as ISO date time strings."""
         unit = JsonEncoder()
         self.assertEqual(unit.default(self.testDateTime), self.testDateTimeString)
+
+    def test_JsonEncoder_regex(self):
+        """Test that the JsonEncoder encodes regular expression objects as their pattern strings."""
+        unit = JsonEncoder()
+        self.assertEqual(unit.default(self.testRegex), self.testRegexPatternString)

@@ -212,6 +212,46 @@ One of the following processing modes
 
 Any description or comment you'd like to associate with the exclusion.
 
+### @-Command Actions
+
+The plugin can react to specific @-commands embedded in the Gcode to control certain processing
+aspects.  The main use case for this is to control enabling or disabling exclusion for specific
+sections of the file, such as start or end gcode.
+
+You can add a new entry at the bottom by entering a Command (e.g. "ExcludeRegion", etc), a
+parameter pattern regular expression to match, the action to perform, providing an optional
+description for the entry, and clicking the "+" button.
+
+For existing entries, you can modify the parameter pattern, action or description, or delete the
+entry by clicking the trashcan button.
+
+Each entry has the following properties:
+
+**Command**
+
+The name of the @-command name that should trigger the action.  The name is provided without the
+leading `@` symbol (e.g. `ExcludeRegion`, not `@ExcludeRegion`), and the matching is case-sensitive
+(e.g. `ExcludeRegion` is considered different than `excluderegion`).
+
+**Parameter Pattern**
+
+A regular expression pattern to match against the parameters provided with the @-command.  The
+action will only be executed for the specified command if the provided parameters match this
+pattern.
+
+**Action**
+
+One of the following actions to take when the specified @-Command is encountered.
+
+  - _**Enable Exclusion**_ - Causes the plugin to enforce any defined exclusion regions for
+     subsequent Gcode commands.
+  - _**Disable Exclusion**_ - Disables exclusion processing for subsequent Gcode commands, and ends
+     any exclusion that is currently occurring.
+
+**Description**
+
+Any description or comment you'd like to associate with the action.
+
 ## How it Works
 
 The plugin intercepts all Gcode commands sent to your 3D printer by OctoPrint while printing.  By
@@ -221,9 +261,9 @@ prevent physical movement and extrusion within that region.
 
 ### Inspected Gcode Commands
 
-The Gcode commands listed in this section are always intercepted and interpreted by the plugin.
-Since they are necessary for the plugin to function correctly, their behavior cannot be changed
-by the `Extended Gcodes to Exclude` configuration.
+The Gcode commands listed in this section are always intercepted and interpreted by the plugin
+while a print is active.  Since they are necessary for the plugin to function correctly, their
+behavior cannot be changed by the `Extended Gcodes to Exclude` configuration.
 
 The following commands are inspected to update the tool position, and will generally not be
 transmitted to the printer if the tool is inside an excluded region.  Retractions (G0/G1 with a
@@ -274,3 +314,42 @@ By default, M204 and M205 are tracked while excluding, but only the last value s
 parameter is processed after exiting the excluded area.  This behavior is intended to reduce the
 amount of communication with the printer while processing excluded commands to minimize processing
 delays and oozing.
+
+### @-Command Actions
+
+The behavior for the commands in this section may be modified in the plugin settings under
+the `"@-Command Actions"` section.
+
+```
+@ExcludeRegion disable
+@ExcludeRegion off
+```
+
+By default, the plugin will respond to an `@ExcludeRegion disable` (or `@ExcludeRegion off`) command
+by disabling exlusion processing.  If exclusion is already disabled, this will have no effect.
+However, if exclusion is currently enabled, the plugin will stop filtering subsequent Gcode commands
+against the defined exclusion regions.  Additionally, if exclusion is currently occurring, that
+exclusion will be immediately ended.
+
+This command is useful to disable exclusion processing at the beginning of start and end Gcode
+scripts.
+
+The default configuration for this command permits specifying additional arguments following the
+`disable`/`off` parameter keyword.  For example:  `@ExcludeRegion disable Before start Gcode`.
+This is purely for documentation/logging purposes and is otherwise ignored by the plugin.
+
+```
+@ExcludeRegion enable
+@ExcludeRegion on
+```
+
+By default, the plugin will respond to an `@ExcludeRegion enable` (or `@ExcludeRegion on`) command
+by enabling exlusion.  If exclusion is already enabled, this will have no effect.  However, if
+exclusion is disabled, exclusion will be re-enabled and any subsequent Gcode commands will be
+processed against any defined exclusion regions.
+
+This command is useful to re-enable exclusion processing at the end of start and end Gcode scripts.
+
+The default configuration for this command permits specifying additional arguments following the
+`enable`/`on` parameter keyword.  For example:  `@ExcludeRegion enable After start Gcode`.
+This is purely for documentation/logging purposes and is otherwise ignored by the plugin.

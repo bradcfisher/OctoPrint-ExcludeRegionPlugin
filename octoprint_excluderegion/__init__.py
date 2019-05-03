@@ -46,6 +46,7 @@ from .GcodeHandlers import GcodeHandlers
 from .RectangularRegion import RectangularRegion
 from .CircularRegion import CircularRegion
 from .ExcludedGcode import ExcludedGcode, EXCLUDE_ALL, EXCLUDE_MERGE
+from .AtCommandAction import AtCommandAction, ENABLE_EXCLUSION, DISABLE_EXCLUSION
 
 
 __plugin_name__ = "Exclude Region"
@@ -82,6 +83,8 @@ def __plugin_load__():
     __plugin_hooks__ = {
         "octoprint.plugin.softwareupdate.check_config":
             __plugin_implementation__.getUpdateInformation,
+        "octoprint.comm.protocol.atcommand.queuing":
+            __plugin_implementation__.handleAtCommandQueuing,
         "octoprint.comm.protocol.gcode.queuing": __plugin_implementation__.handleGcodeQueuing
     }
 
@@ -213,6 +216,20 @@ class ExcludeRegionPlugin(
                     "description": "Record advanced setting changes while excluding and apply " +
                                    "the most recent values in a single command after exiting the " +
                                    "excluded area"
+                }
+            ],
+            atCommandActions=[
+                {
+                    "command": "ExcludeRegion",
+                    "parameterPattern": "^\\s*(enable|on)(\\s|$)",
+                    "action": ENABLE_EXCLUSION,
+                    "description": "Default action to enable exclusion"
+                },
+                {
+                    "command": "ExcludeRegion",
+                    "parameterPattern": "^\\s*(disable|off)(\\s|$)",
+                    "action": DISABLE_EXCLUSION,
+                    "description": "Default action to disable exclusion"
                 }
             ]
         )
@@ -612,6 +629,21 @@ class ExcludeRegionPlugin(
             extendedExcludeGcodes[val.gcode] = val
         self.gcodeHandlers.extendedExcludeGcodes = extendedExcludeGcodes
 
+        atCommandActions = {}
+        for val in self._settings.get(["atCommandActions"]):
+            val = AtCommandAction(
+                val["command"],
+                val["parameterPattern"],
+                val["action"],
+                val["description"]
+            )
+            entry = atCommandActions.get(val.command)
+            if (entry is None):
+                atCommandActions[val.command] = [val]
+            else:
+                entry.append(val)
+        self.gcodeHandlers.atCommandActions = atCommandActions
+
         self.setLoggingMode(self._settings.get(["loggingMode"]))
 
         self._logger.info(
@@ -619,13 +651,13 @@ class ExcludeRegionPlugin(
             "clearRegionsAfterPrintFinishes=%s, mayShrinkRegionsWhilePrinting=%s, " +
             "loggingMode=%s, " +
             "enteringExcludedRegionGcode=%s, exitingExcludedRegionGcode=%s, " +
-            "extendedExcludeGcodes=%s",
+            "extendedExcludeGcodes=%s, atCommandActions=%s",
             self.gcodeHandlers.g90InfluencesExtruder,
             self.clearRegionsAfterPrintFinishes, self.mayShrinkRegionsWhilePrinting,
             self._loggingMode,
             self.gcodeHandlers.enteringExcludedRegionGcode,
             self.gcodeHandlers.exitingExcludedRegionGcode,
-            extendedExcludeGcodes
+            extendedExcludeGcodes, atCommandActions
         )
 
     # pylint: disable=invalid-name,too-many-arguments,unused-argument
@@ -640,12 +672,27 @@ class ExcludeRegionPlugin(
             self._logger.debug(
                 "handleGcodeQueuing: " +
                 "phase=%s, cmd=%s, cmd_type=%s, gcode=%s, subcode=%s, tags=%s, " +
-                "(isActivePrintJob=%s, excluding=%s)",
+                "(isActivePrintJob=%s, isExclusionEnabled=%s, excluding=%s)",
                 phase, cmd, cmd_type, gcode, subcode, tags,
-                self.isActivePrintJob(), self.gcodeHandlers.excluding
+                self.isActivePrintJob(), self.gcodeHandlers.isExclusionEnabled(),
+                self.gcodeHandlers.excluding
             )
 
         if (gcode and self.isActivePrintJob()):
             return self.gcodeHandlers.handleGcode(cmd, gcode, subcode)
 
         return None
+
+    def handleAtCommandQueuing(self, comm_instance, phase, cmd, parameters, tags=None):
+        """Command processing handler for octoprint.comm.protocol.atcommand.queuing plugin hook."""
+        self._logger.debug(
+            "handleAtCommandQueuing: " +
+            "phase=%s, command=%s, parameters=%s, tags=%s, " +
+            "(isActivePrintJob=%s, isExclusionEnabled=%s, excluding=%s)",
+            phase, cmd, parameters, tags,
+            self.isActivePrintJob(), self.gcodeHandlers.isExclusionEnabled(),
+            self.gcodeHandlers.excluding
+        )
+
+        if (self.isActivePrintJob()):
+            self.gcodeHandlers.handleAtCommand(comm_instance, cmd, parameters)

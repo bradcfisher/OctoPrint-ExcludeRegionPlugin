@@ -852,7 +852,37 @@ $(function() {
     self.removeExtendedGcode = function(row) {
       self.settings.extendedExcludeGcodes.remove(row);
     }
+
+    self.addAtCommandAction = function() {
+      var $command = $("#settings-excluderegion_newAtCommand");
+      var command = $command.val().trim();
+
+      var $parameterPattern = $("#settings-excluderegion_newAtCommandParameterPattern");
+      var parameterPattern = $parameterPattern.val().trim();
+
+      var $action = $("#settings-excluderegion_newAtCommandAction");
+      var action = $action.val();
+
+      var $desc = $("#settings-excluderegion_newAtCommandDescription");
+      var desc = $desc.val();
+
+      self.settings.atCommandActions.push({
+        "command": ko.observable(command),
+        "parameterPattern": ko.observable(parameterPattern),
+        "action": ko.observable(action),
+        "description": ko.observable(desc)
+      });
+
+      $command.val('');
+      $parameterPattern.val('');
+      $action.val('enable_exclusion');
+      $desc.val('');
+    }
     
+    self.removeAtCommandAction = function(row) {
+      self.settings.atCommandActions.remove(row);
+    }
+
     function resetExcludeButtons() {
       removeExcludeButtons();
       addExcludeButtons();

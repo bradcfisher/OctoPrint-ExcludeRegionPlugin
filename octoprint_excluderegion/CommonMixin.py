@@ -4,7 +4,14 @@
 from __future__ import absolute_import
 
 import json
+import re
 from datetime import date, datetime
+
+# This is a hack to determine the type of object that re.compile returns, since the type
+#    "re.RegexObject" mentioned in the official Python documentation doesn't actually exist.
+# Could alternatively use "re._pattern_type" (undocumented and marked private)
+#    or the following in 3.6: "from typing import Pattern"
+REGEX_TYPE = type(re.compile(""))
 
 
 class JsonEncoder(json.JSONEncoder):
@@ -18,6 +25,9 @@ class JsonEncoder(json.JSONEncoder):
 
         if isinstance(obj, (datetime, date)):
             return obj.isoformat()
+
+        if (isinstance(obj, REGEX_TYPE)):
+            return obj.pattern
 
         return json.JSONEncoder.default(self, obj)
 

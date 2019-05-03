@@ -18,7 +18,7 @@ class ExcludedGcodeTests(TestCase):
 
         self.assertIsInstance(unit, ExcludedGcode)
         self.assertEqual(unit.gcode, "G117", "gcode should be 'G117'")
-        self.assertEqual(unit.mode, EXCLUDE_ALL, "gcode should be '" + EXCLUDE_ALL + "'")
+        self.assertEqual(unit.mode, EXCLUDE_ALL, "mode should be '" + EXCLUDE_ALL + "'")
         self.assertEqual(
             unit.description, "My description", "description should be 'My description'"
         )
