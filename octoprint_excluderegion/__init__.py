@@ -43,6 +43,7 @@ from octoprint.events import Events
 from octoprint.settings import settings
 
 from .GcodeHandlers import GcodeHandlers
+from .ExcludeRegionState import ExcludeRegionState
 from .RectangularRegion import RectangularRegion
 from .CircularRegion import CircularRegion
 from .ExcludedGcode import ExcludedGcode, EXCLUDE_ALL, EXCLUDE_MERGE
@@ -109,6 +110,8 @@ class ExcludeRegionPlugin(
         from the setting of the same name.
     _activePrintJob : boolean
         Whether a print is currently in progress or not.
+    state : ExcludeRegionState
+        ExcludeRegionState instance for managing the current plugin state
     gcodeHandlers : GcodeHandlers
         GcodeHandlers instance providing the actual Gcode processing
     """
@@ -122,6 +125,7 @@ class ExcludeRegionPlugin(
         self._activePrintJob = None
         self.clearRegionsAfterPrintFinishes = None
         self.mayShrinkRegionsWhilePrinting = None
+        self.state = None
         self.gcodeHandlers = None
         self._loggingMode = None
         self._pluginLoggingHandler = None
@@ -135,9 +139,10 @@ class ExcludeRegionPlugin(
         after all injected properties are populated.
         """
         self._activePrintJob = False
-        self.gcodeHandlers = GcodeHandlers(self._logger)
-        self.handleSettingsUpdated()
-        self.notifyExcludedRegionsChanged()
+        self.state = ExcludeRegionState(self._logger)
+        self.gcodeHandlers = GcodeHandlers(self.state, self._logger)
+        self._handleSettingsUpdated()
+        self._notifyExcludedRegionsChanged()
 
         self._logger.debug("Plugin initialization complete")
 
@@ -329,7 +334,7 @@ class ExcludeRegionPlugin(
         self._logger.debug("API command received: %s", data)
 
         if (command == "deleteExcludeRegion"):
-            return self.handleDeleteExcludeRegion(data.get("id"))
+            return self._handleDeleteExcludeRegion(data.get("id"))
         else:
             regionType = data.get("type")
 
@@ -341,9 +346,9 @@ class ExcludeRegionPlugin(
                 return "Invalid type", 400
 
             if (command == "addExcludeRegion"):
-                return self.handleAddExcludeRegion(region)
+                return self._handleAddExcludeRegion(region)
             elif (command == "updateExcludeRegion"):
-                return self.handleUpdateExcludeRegion(region)
+                return self._handleUpdateExcludeRegion(region)
 
             return "Invalid command", 400
 
@@ -371,7 +376,7 @@ class ExcludeRegionPlugin(
            }
         """
         return flask.jsonify(
-            excluded_regions=[region.toDict() for region in self.gcodeHandlers.excludedRegions]
+            excluded_regions=[region.toDict() for region in self.state.excludedRegions]
         )
 
     # ~~ EventHandlerPlugin
@@ -398,166 +403,32 @@ class ExcludeRegionPlugin(
 
         if (event == Events.FILE_SELECTED):
             self._logger.info("File selected, resetting internal state")
-            self.gcodeHandlers.resetInternalPrintState(True)
-            self.notifyExcludedRegionsChanged()
+            self.state.resetState(True)
+            self._notifyExcludedRegionsChanged()
         elif (event == Events.SETTINGS_UPDATED):
-            self.handleSettingsUpdated()
+            self._handleSettingsUpdated()
         elif (event == Events.PRINT_STARTED):
             self._logger.info("Printing started")
-            self.gcodeHandlers.resetInternalPrintState()
+            self.state.resetState()
             self._activePrintJob = True
-        elif (
-                (event == Events.PRINT_DONE)
-                or (event == Events.PRINT_FAILED)
-                or (event == Events.PRINT_CANCELLING)
-                or (event == Events.PRINT_CANCELLED)
-                or (event == Events.ERROR)
-        ):
+        elif (event in (
+                Events.PRINT_DONE,
+                Events.PRINT_FAILED,
+                Events.PRINT_CANCELLING,
+                Events.PRINT_CANCELLED,
+                Events.ERROR
+        )):
             self._logger.info("Printing stopped: event=%s", event)
             self._activePrintJob = False
             if (self.clearRegionsAfterPrintFinishes):
-                self.gcodeHandlers.resetInternalPrintState(True)
-                self.notifyExcludedRegionsChanged()
+                self.state.resetState(True)
+                self._notifyExcludedRegionsChanged()
 
     # ~~ ExcludeRegionPlugin
 
     def isActivePrintJob(self):
         """Whether a print is currently in progress or not."""
         return self._activePrintJob
-
-    def handleAddExcludeRegion(self, region):
-        """
-        Add a new exclusion region.
-
-        Parameters
-        ----------
-        region : Region
-            The new region to add
-
-        Returns
-        -------
-        None | Tuple(string, status_code)
-            Returns None if the operation was successful, and an error status tuple if the specified
-            region has the same id as an existing region.
-        """
-        try:
-            self.gcodeHandlers.addRegion(region)
-            self.notifyExcludedRegionsChanged()
-            return None
-        except ValueError as err:
-            return err.args[0], 409
-
-    def handleDeleteExcludeRegion(self, idToDelete):
-        """
-        Remove the region with the specified id.
-
-        Parameters
-        ----------
-        idToDelete : string
-            The id of the region to remove.
-
-        Returns
-        -------
-        None | Tuple(string, status_code)
-            Returns None if the operation was successful, and an error status tuple if the region
-            cannot be deleted.
-        """
-        if (not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()):
-            return "Cannot delete region while printing", 409
-
-        if (self.gcodeHandlers.deleteRegion(idToDelete)):
-            self.notifyExcludedRegionsChanged()
-
-        return None
-
-    def handleUpdateExcludeRegion(self, newRegion):
-        """
-        Replace an existing region with a new one.
-
-        Parameters
-        ----------
-        region : Region
-            The new region to use as a replacement for an existing one with a matching id.
-
-        Returns
-        -------
-        None | Tuple(string, status_code)
-            Returns None if the operation was successful, and an error status tuple if the new
-            region does not have an id or the modified region is required to fully contain the
-            original area.
-        """
-        try:
-            self.gcodeHandlers.replaceRegion(
-                newRegion,
-                not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()
-            )
-            self.notifyExcludedRegionsChanged()
-            return None
-        except ValueError as err:
-            return err.args[0], 409
-
-    def notifyExcludedRegionsChanged(self):
-        """
-        Send an 'excludedRegionsChanged' event to any interested listeners.
-
-        The event sent has the following structure:
-
-        .. code-block:: javascript
-           {
-             "event": "excludedRegionsChanged",
-             "excluded_regions": [
-               {
-                 "type": "RectangularRegion",
-                 "id": "...uuid...",
-                 "x1": 1, "y1": 1, "x2": 2, "y2": 2
-               },
-               {
-                 "type": "CircularRegion",
-                 "id": "...uuid...",
-                 "cx": 1, "cy": 1, "r": 2
-               }
-               // etc ...
-             ]
-           }
-        """
-        self._plugin_manager.send_plugin_message(
-            self._identifier,
-            dict(
-                event=EXCLUDED_REGIONS_CHANGED,
-                excluded_regions=[region.toDict() for region in self.gcodeHandlers.excludedRegions]
-            )
-        )
-
-    @staticmethod
-    def splitGcodeScript(gcodeString):
-        """
-        Split multiple lines of Gcode at line breaks and remove comments and blank lines.
-
-        Parameters
-        ----------
-        gcodeString : string
-            The Gcode string to split and sanitize
-
-        Returns
-        -------
-        List of string
-            The sanitized list of Gcode commands
-        """
-        if (gcodeString is None):
-            return None
-
-        tmp = REGEX_SPLIT_GCODE_LINES.split(gcodeString)
-
-        gcodeCommands = []
-        for gcode in tmp:
-            gcode = REGEX_TRIM_GCODE.match(gcode).group(1)
-            if (gcode != ""):
-                gcodeCommands.append(gcode)
-
-        if (not gcodeCommands):
-            gcodeCommands = None
-
-        return gcodeCommands
 
     def setLoggingMode(self, loggingMode):
         """
@@ -602,7 +473,141 @@ class ExcludeRegionPlugin(
         # Write a message to the new log
         self._logger.info("Logging mode set to '%s'", self._loggingMode)
 
-    def handleSettingsUpdated(self):
+    def _handleAddExcludeRegion(self, region):
+        """
+        Add a new exclusion region.
+
+        Parameters
+        ----------
+        region : Region
+            The new region to add
+
+        Returns
+        -------
+        None | Tuple(string, status_code)
+            Returns None if the operation was successful, and an error status tuple if the specified
+            region has the same id as an existing region.
+        """
+        try:
+            self.state.addRegion(region)
+            self._notifyExcludedRegionsChanged()
+            return None
+        except ValueError as err:
+            return err.args[0], 409
+
+    def _handleDeleteExcludeRegion(self, idToDelete):
+        """
+        Remove the region with the specified id.
+
+        Parameters
+        ----------
+        idToDelete : string
+            The id of the region to remove.
+
+        Returns
+        -------
+        None | Tuple(string, status_code)
+            Returns None if the operation was successful, and an error status tuple if the region
+            cannot be deleted.
+        """
+        if (not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()):
+            return "Cannot delete region while printing", 409
+
+        if (self.state.deleteRegion(idToDelete)):
+            self._notifyExcludedRegionsChanged()
+
+        return None
+
+    def _handleUpdateExcludeRegion(self, newRegion):
+        """
+        Replace an existing region with a new one.
+
+        Parameters
+        ----------
+        region : Region
+            The new region to use as a replacement for an existing one with a matching id.
+
+        Returns
+        -------
+        None | Tuple(string, status_code)
+            Returns None if the operation was successful, and an error status tuple if the new
+            region does not have an id or the modified region is required to fully contain the
+            original area.
+        """
+        try:
+            self.state.replaceRegion(
+                newRegion,
+                not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()
+            )
+            self._notifyExcludedRegionsChanged()
+            return None
+        except ValueError as err:
+            return err.args[0], 409
+
+    def _notifyExcludedRegionsChanged(self):
+        """
+        Send an 'excludedRegionsChanged' event to any interested listeners.
+
+        The event sent has the following structure:
+
+        .. code-block:: javascript
+           {
+             "event": "excludedRegionsChanged",
+             "excluded_regions": [
+               {
+                 "type": "RectangularRegion",
+                 "id": "...uuid...",
+                 "x1": 1, "y1": 1, "x2": 2, "y2": 2
+               },
+               {
+                 "type": "CircularRegion",
+                 "id": "...uuid...",
+                 "cx": 1, "cy": 1, "r": 2
+               }
+               // etc ...
+             ]
+           }
+        """
+        self._plugin_manager.send_plugin_message(
+            self._identifier,
+            dict(
+                event=EXCLUDED_REGIONS_CHANGED,
+                excluded_regions=[region.toDict() for region in self.state.excludedRegions]
+            )
+        )
+
+    @staticmethod
+    def _splitGcodeScript(gcodeString):
+        """
+        Split multiple lines of Gcode at line breaks and remove comments and blank lines.
+
+        Parameters
+        ----------
+        gcodeString : string
+            The Gcode string to split and sanitize
+
+        Returns
+        -------
+        List of string
+            The sanitized list of Gcode commands
+        """
+        if (gcodeString is None):
+            return None
+
+        tmp = REGEX_SPLIT_GCODE_LINES.split(gcodeString)
+
+        gcodeCommands = []
+        for gcode in tmp:
+            gcode = REGEX_TRIM_GCODE.match(gcode).group(1)
+            if (gcode != ""):
+                gcodeCommands.append(gcode)
+
+        if (not gcodeCommands):
+            gcodeCommands = None
+
+        return gcodeCommands
+
+    def _handleSettingsUpdated(self):
         """Update internal state when a settings change is detected."""
         self.clearRegionsAfterPrintFinishes = \
             self._settings.getBoolean(["clearRegionsAfterPrintFinishes"])
@@ -610,14 +615,14 @@ class ExcludeRegionPlugin(
         self.mayShrinkRegionsWhilePrinting = \
             self._settings.getBoolean(["mayShrinkRegionsWhilePrinting"])
 
-        self.gcodeHandlers.g90InfluencesExtruder = \
+        self.state.g90InfluencesExtruder = \
             settings().getBoolean(["feature", "g90InfluencesExtruder"])
 
-        self.gcodeHandlers.enteringExcludedRegionGcode = \
-            self.splitGcodeScript(self._settings.get(["enteringExcludedRegionGcode"]))
+        self.state.enteringExcludedRegionGcode = \
+            self._splitGcodeScript(self._settings.get(["enteringExcludedRegionGcode"]))
 
-        self.gcodeHandlers.exitingExcludedRegionGcode = \
-            self.splitGcodeScript(self._settings.get(["exitingExcludedRegionGcode"]))
+        self.state.exitingExcludedRegionGcode = \
+            self._splitGcodeScript(self._settings.get(["exitingExcludedRegionGcode"]))
 
         extendedExcludeGcodes = {}
         for val in self._settings.get(["extendedExcludeGcodes"]):
@@ -627,7 +632,7 @@ class ExcludeRegionPlugin(
                 val["description"]
             )
             extendedExcludeGcodes[val.gcode] = val
-        self.gcodeHandlers.extendedExcludeGcodes = extendedExcludeGcodes
+        self.state.extendedExcludeGcodes = extendedExcludeGcodes
 
         atCommandActions = {}
         for val in self._settings.get(["atCommandActions"]):
@@ -642,7 +647,7 @@ class ExcludeRegionPlugin(
                 atCommandActions[val.command] = [val]
             else:
                 entry.append(val)
-        self.gcodeHandlers.atCommandActions = atCommandActions
+        self.state.atCommandActions = atCommandActions
 
         self.setLoggingMode(self._settings.get(["loggingMode"]))
 
@@ -652,11 +657,11 @@ class ExcludeRegionPlugin(
             "loggingMode=%s, " +
             "enteringExcludedRegionGcode=%s, exitingExcludedRegionGcode=%s, " +
             "extendedExcludeGcodes=%s, atCommandActions=%s",
-            self.gcodeHandlers.g90InfluencesExtruder,
+            self.state.g90InfluencesExtruder,
             self.clearRegionsAfterPrintFinishes, self.mayShrinkRegionsWhilePrinting,
             self._loggingMode,
-            self.gcodeHandlers.enteringExcludedRegionGcode,
-            self.gcodeHandlers.exitingExcludedRegionGcode,
+            self.state.enteringExcludedRegionGcode,
+            self.state.exitingExcludedRegionGcode,
             extendedExcludeGcodes, atCommandActions
         )
 
@@ -674,8 +679,8 @@ class ExcludeRegionPlugin(
                 "phase=%s, cmd=%s, cmd_type=%s, gcode=%s, subcode=%s, tags=%s, " +
                 "(isActivePrintJob=%s, isExclusionEnabled=%s, excluding=%s)",
                 phase, cmd, cmd_type, gcode, subcode, tags,
-                self.isActivePrintJob(), self.gcodeHandlers.isExclusionEnabled(),
-                self.gcodeHandlers.excluding
+                self.isActivePrintJob(), self.state.isExclusionEnabled(),
+                self.state.excluding
             )
 
         if (gcode and self.isActivePrintJob()):
@@ -690,8 +695,8 @@ class ExcludeRegionPlugin(
             "phase=%s, command=%s, parameters=%s, tags=%s, " +
             "(isActivePrintJob=%s, isExclusionEnabled=%s, excluding=%s)",
             phase, cmd, parameters, tags,
-            self.isActivePrintJob(), self.gcodeHandlers.isExclusionEnabled(),
-            self.gcodeHandlers.excluding
+            self.isActivePrintJob(), self.state.isExclusionEnabled(),
+            self.state.excluding
         )
 
         if (self.isActivePrintJob()):
