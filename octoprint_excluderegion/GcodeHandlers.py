@@ -53,7 +53,7 @@ class GcodeHandlers(object):
         self.state = state
         self._logger = logger
 
-    def planArc(self, endX, endY, i, j, clockwise):  # pylint: disable=invalid-name, too-many-locals
+    def planArc(self, endX, endY, i, j, clockwise):  # pylint: disable=too-many-locals,invalid-name
         """
         Compute a sequence of moves approximating an arc (G2/G3).
 
@@ -187,6 +187,49 @@ class GcodeHandlers(object):
         """
         return self._handle_G0(cmd, gcode, subcode)
 
+    def _computeCenterOffsets(self, x, y, radius, clockwise):  # pylint: disable=too-many-locals
+        """
+        Compute the i & j offsets for an arc given a radius, direction and ending point.
+
+        Parameters
+        ----------
+        x : float
+            The ending X coordinate provided in the GCode command.
+        y : float
+            The ending Y coordinate provided in the GCode command.
+        radius : float
+            The radius of the arc to compute the center point offset for.
+        clockwise : boolean
+            Whether the arc proceeds in a clockwise or counter-clockwise direction.
+        """
+        # pylint: disable=invalid-name
+        position = self.state.position
+        i = 0
+        j = 0
+        p1 = position.X_AXIS.current
+        q1 = position.Y_AXIS.current
+        p2 = x
+        q2 = y
+
+        if (radius and (p1 != p2 or q1 != q2)):
+            e = (1 if clockwise else 0) ^ (-1 if (radius < 0) else 1)
+            deltaX = p2 - p1
+            deltaY = q2 - q1
+            dist = math.hypot(deltaX, deltaY)
+            halfDist = dist / 2
+            h = math.sqrt(radius*radius - halfDist*halfDist)
+            midX = (p1 + p2) / 2
+            midY = (q1 + q2) / 2
+            sx = -deltaY / dist
+            sy = -deltaX / dist
+            centerX = midX + e * h * sx
+            centerY = midY + e * h * sy
+
+            i = centerX - p1
+            j = centerY - q1
+
+        return (i, j)
+
     def _handle_G2(self, cmd, gcode, subcode=None):  # pylint: disable=unused-argument,invalid-name
         """
         G2 - Controlled Arc Move (Clockwise).
@@ -194,18 +237,15 @@ class GcodeHandlers(object):
         G2 [E<pos>] [F<rate>] R<radius> [X<pos>] [Y<pos>] [Z<pos>]
         G2 [E<pos>] [F<rate>] I<offset> J<offset> [X<pos>] [Y<pos>] [Z<pos>]
         """
-        # pylint: disable=invalid-name
+        # pylint: disable=invalid-name, too-many-locals
         clockwise = (gcode == "G2")
         position = self.state.position
-        xAxis = position.X_AXIS
-        yAxis = position.Y_AXIS
-        zAxis = position.Z_AXIS
 
         extruderPosition = None
         feedRate = None
-        x = xAxis.current
-        y = yAxis.current
-        z = zAxis.current
+        x = position.X_AXIS.current
+        y = position.Y_AXIS.current
+        z = position.Z_AXIS.current
         radius = None
         i = 0
         j = 0
@@ -216,11 +256,11 @@ class GcodeHandlers(object):
                 label = match.group("label").upper()
                 value = float(match.group("value"))
                 if (label == "X"):
-                    x = xAxis.logicalToNative(value)
+                    x = position.X_AXIS.logicalToNative(value)
                 elif (label == "Y"):
-                    y = yAxis.logicalToNative(value)
+                    y = position.Y_AXIS.logicalToNative(value)
                 elif (label == "Z"):
-                    z = zAxis.logicalToNative(value)
+                    z = position.Z_AXIS.logicalToNative(value)
                 elif (label == "E"):
                     extruderPosition = position.E_AXIS.logicalToNative(value)
                 elif (label == "F"):
@@ -228,33 +268,13 @@ class GcodeHandlers(object):
                 elif (label == "R"):
                     radius = value
                 if (label == "I"):
-                    i = xAxis.logicalToNative(value)
+                    i = position.X_AXIS.logicalToNative(value)
                 if (label == "J"):
-                    j = yAxis.logicalToNative(value)
+                    j = position.Y_AXIS.logicalToNative(value)
 
         # Based on Marlin 1.1.8
         if (radius is not None):
-            p1 = xAxis.current
-            q1 = yAxis.current
-            p2 = x
-            q2 = y
-
-            if (radius and (p1 != p2 or q1 != q2)):
-                e = (1 if clockwise else 0) ^ (-1 if (radius < 0) else 1)
-                deltaX = p2 - p1
-                deltaY = q2 - q1
-                dist = math.hypot(deltaX, deltaY)
-                halfDist = dist / 2
-                h = math.sqrt(radius*radius - halfDist*halfDist)
-                midX = (p1 + p2) / 2
-                midY = (q1 + q2) / 2
-                sx = -deltaY / dist
-                sy = -deltaX / dist
-                centerX = midX + e * h * sx
-                centerY = midY + e * h * sy
-
-                i = centerX - p1
-                j = centerY - q1
+            (i, j) = self._computeCenterOffsets(x, y, radius, clockwise)
 
         if (i or j):
             xyPairs = self.planArc(x, y, i, j, clockwise)
@@ -409,13 +429,13 @@ class GcodeHandlers(object):
                 elif (label == "Z"):
                     position.Z_AXIS.setHomeOffset(value)
 
-    def handleAtCommand(self, comm_instance, cmd, parameters):  # pylint: disable=invalid-name
+    def handleAtCommand(self, commInstance, cmd, parameters):
         """
         Process registered At-Command actions.
 
         Parameters
         ----------
-        comm_instance : octoprint.util.comm.MachineCom
+        commInstance : octoprint.util.comm.MachineCom
             The MachineCom instance to use for sending any Gcode commands produced
         cmd : string
             The At-Command that was encountered
@@ -439,4 +459,4 @@ class GcodeHandlers(object):
                                 "handleAtCommand: sending Gcode command to printer: cmd=%s",
                                 command
                             )
-                            comm_instance.sendCommand(command)
+                            commInstance.sendCommand(command)

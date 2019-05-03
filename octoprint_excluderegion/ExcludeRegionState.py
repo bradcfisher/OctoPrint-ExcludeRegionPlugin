@@ -411,19 +411,19 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         return returnCommands
 
-    def recoverRetractionIfNeeded(
-            self, returnCommands=None, originalCmd=None, firmwareRecovery=None
-    ):
+    def _recoverRetraction(self, returnCommands, cmd, firmwareRecovery):
         """
-        Execute a recovery for a previously executed retraction if one is needed.
+        Execute a recovery for a previously executed retraction (if any).
+
+        If a cmd is provided, it will be appended at the end of the returned list of Gcodes.
 
         Parameters
         ----------
         returnCommands : List of Gcode commands | None
             The Gcode command list to append any new command(s) to.  If None, a new list will be
             created.
-        originalCmd : string | None
-            Original retraction gcode.
+        cmd : string | None
+            The gcode the retraction is being recovered for.
         firmwareRecovery : boolean | None
             Whether to request a firmware recovery (G11) or not.
 
@@ -434,63 +434,103 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             recovery should be performed, the appropriate Gcode command(s) will be appended to the
             returned list.  It is up to the caller to ensure these commands are sent to the printer.
         """
-        if (self.lastRetraction is not None):
-            if (self.excluding):
-                if (firmwareRecovery is not None):
-                    self.lastRetraction.recoverExcluded = True
-            else:
-                lastRetraction = self.lastRetraction
-                if (lastRetraction.recoverExcluded):
-                    # Recover from the previous retraction
-                    self._logger.info(
-                        "Executing pending recovery for previous retraction: %s",
-                        lastRetraction
-                    )
+        lastRetraction = self.lastRetraction
+        if (lastRetraction.recoverExcluded):
+            # Recover from the previous retraction
+            self._logger.info(
+                "Executing pending recovery for previous retraction: %s",
+                lastRetraction
+            )
 
-                    returnCommands = lastRetraction.addRecoverCommands(
-                        self.position,
-                        returnCommands
-                    )
+            returnCommands = lastRetraction.addRecoverCommands(
+                self.position,
+                returnCommands
+            )
 
-                self.lastRetraction = None
+        self.lastRetraction = None
 
-                # Execute the original command
-                if (originalCmd is not None):
-                    if (firmwareRecovery is not None) and lastRetraction.recoverExcluded:
-                        # The command is a recovery, but we just recovered from a previous
-                        # retraction.  That should indicate multiple recoveries without an
-                        # intervening retraction.
-                        # This isn't really an expected case, so log it
-                        self._logger.info(
-                            "Recovery encountered immediately following a pending recovery " +
-                            "action: originalCmd=%s, lastRetraction=%s",
-                            originalCmd, lastRetraction
-                        )
-
-                    if (returnCommands is not None):
-                        returnCommands.append(originalCmd)
-                    else:
-                        returnCommands = [originalCmd]
-        elif (not self.excluding and (originalCmd is not None)):
-            if (firmwareRecovery is not None):
-                # This is a recovery that doesn't correspond to a previous retraction
-                # It doesn't seem like this should occur (often) in a well-formed file.
-                # Cura generates one at the start of the file, but doesn't seem to after that point.
-                # Since it's not generally expected, log it
-                self._logger.debug(
-                    "Encountered recovery without a corresponding retraction: %s",
-                    originalCmd
+        # Execute the command
+        if (cmd is not None):
+            if (firmwareRecovery is not None) and lastRetraction.recoverExcluded:
+                # The command is a recovery (not an extruding move), but we just recovered from a
+                # previous retraction.  That should indicate multiple recoveries without an
+                # intervening retraction.
+                # This isn't really an expected case, so log it
+                self._logger.info(
+                    "Recovery encountered immediately following a pending recovery " +
+                    "action: cmd=%s, lastRetraction=%s",
+                    cmd, lastRetraction
                 )
 
             if (returnCommands is not None):
-                returnCommands.append(originalCmd)
+                returnCommands.append(cmd)
             else:
-                returnCommands = [originalCmd]
+                returnCommands = [cmd]
+
+        return returnCommands
+
+    def recoverRetractionIfNeeded(
+            self, returnCommands=None, cmd=None, firmwareRecovery=None
+    ):
+        """
+        Execute a recovery for a previously executed retraction if one is needed.
+
+        This will typically be invoked before an extruding move to ensure that a previously executed
+        retraction (if any) is recovered before executing the move.
+
+        When not excluding, the cmd passed in will be included in the return value.  When excluding,
+        the cmd will not be included in the result and will instead be dropped.
+
+        Parameters
+        ----------
+        returnCommands : List of Gcode commands | None
+            The Gcode command list to append any new command(s) to.  If None, a new list will be
+            created.
+        cmd : string | None
+            The gcode the retraction is being recovered for.
+        firmwareRecovery : boolean | None
+            Whether to request a firmware recovery (G11) [True], a non-firmware recovery (G0/G1 with
+            no X/Y/Z component) [False], or an extruding move (G0/G1 with X/Y/Z component) [None].
+
+        Returns
+        -------
+        List of Gcode commands
+            The Gcode command list provided in *returnCommands* or a newly created list.  If the
+            recovery should be performed, the appropriate Gcode command(s) will be appended to the
+            returned list.  It is up to the caller to ensure these commands are sent to the printer.
+        """
+        if (self.lastRetraction is not None):
+            if (self.excluding):
+                # If excluding, and encountered a recovery (not an extruding move), then update the
+                # current retraction state to indicate the retraction should be automatically
+                # recovered after exiting the excluded region.
+                if (firmwareRecovery is not None):
+                    self.lastRetraction.recoverExcluded = True
+            else:
+                # If not excluding, then execute any needed recovery commands and then the
+                # provided cmd
+                self._recoverRetraction(returnCommands, cmd, firmwareRecovery)
+        elif (not self.excluding and (cmd is not None)):
+            if (firmwareRecovery is not None):
+                # This is a recovery that doesn't correspond to a previous retraction
+                # It doesn't seem like this should occur (often) in a well-formed file.
+                # Cura generates one at the start of the file to prime the nozzle, but doesn't seem
+                # to after that point.
+                # Since it's not generally expected, log it
+                self._logger.debug(
+                    "Encountered recovery without a corresponding retraction: %s",
+                    cmd
+                )
+
+            if (returnCommands is not None):
+                returnCommands.append(cmd)
+            else:
+                returnCommands = [cmd]
 
         if (firmwareRecovery is not None):
             self._logger.debug(
-                "recovery: excluding=%s, originalCmd=%s, returnCommands=%s",
-                self.excluding, originalCmd, returnCommands
+                "recovery: excluding=%s, cmd=%s, returnCommands=%s",
+                self.excluding, cmd, returnCommands
             )
 
         return returnCommands
@@ -720,6 +760,45 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         return returnCommands
 
+    def _processExtendedGcodeEntry(self, mode, cmd, gcode):
+        """
+        Process the given extended GCode command using the provided processing mode.
+
+        Parameters
+        ----------
+        mode : string
+            The mode to use for processing the command.  One of EXCLUDE_MERGE, EXCLUDE_EXCEPT_FIRST,
+            or EXCLUDE_EXCEPT_LAST.
+        cmd : string
+            The full Gcode command, including arguments.
+        gcode : string
+            Gcode command code only, e.g. G0 or M110
+        """
+        self._logger.debug(
+            "processExtendedGcode: gcode excluded by extended configuration: " +
+            "mode=%s, cmd=%s",
+            mode, cmd
+        )
+
+        if (mode == EXCLUDE_MERGE):
+            # Capture the last value for each argument encountered for the command
+            pendingArgs = self.pendingCommands.get(gcode)
+            if (pendingArgs is None):
+                pendingArgs = {}
+                self.pendingCommands[gcode] = pendingArgs
+
+            cmdArgs = REGEX_SPLIT.split(cmd)
+            for index in range(1, len(cmdArgs)):
+                arg = cmdArgs[index]
+                pendingArgs[arg[0].upper()] = arg[1:]
+        elif (mode == EXCLUDE_EXCEPT_FIRST):
+            # Capture the first instance of the command encountered
+            if (not (gcode in self.pendingCommands)):
+                self.pendingCommands[gcode] = cmd
+        elif (mode == EXCLUDE_EXCEPT_LAST):
+            # Capture the last instance of the command encountered
+            self.pendingCommands[gcode] = cmd
+
     def processExtendedGcode(self, cmd, gcode, subcode=None):
         """
         Determine whether a Gcode command is configured for exclusion and process accordingly.
@@ -747,32 +826,9 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         if (gcode and self.excluding):
             entry = self.extendedExcludeGcodes.get(gcode)
-            if (entry is not None):
-                mode = entry.mode
-                if (mode is not None):
-                    self._logger.debug(
-                        "processExtendedGcode: gcode excluded by extended configuration: " +
-                        "mode=%s, cmd=%s",
-                        mode, cmd
-                    )
-
-                    if (mode == EXCLUDE_MERGE):
-                        pendingArgs = self.pendingCommands.get(gcode)
-                        if (pendingArgs is None):
-                            pendingArgs = {}
-                            self.pendingCommands[gcode] = pendingArgs
-
-                        cmdArgs = REGEX_SPLIT.split(cmd)
-                        for index in range(1, len(cmdArgs)):
-                            arg = cmdArgs[index]
-                            pendingArgs[arg[0].upper()] = arg[1:]
-                    elif (mode == EXCLUDE_EXCEPT_FIRST):
-                        if (not (gcode in self.pendingCommands)):
-                            self.pendingCommands[gcode] = cmd
-                    elif (mode == EXCLUDE_EXCEPT_LAST):
-                        self.pendingCommands[gcode] = cmd
-
-                    return self.ignoreGcodeCommand()
+            if (entry is not None) and (entry.mode is not None):
+                self._processExtendedGcodeEntry(entry.mode, cmd, gcode)
+                return self.ignoreGcodeCommand()
 
         # Otherwise, let the command process normally
         return None
