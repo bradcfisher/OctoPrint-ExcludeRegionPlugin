@@ -43,7 +43,7 @@ def build_command(gcode, **kwargs):
     if (len(vals) > 1):
         return " ".join(vals)
 
-    return None
+    return gcode
 
 
 class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attributes
@@ -268,6 +268,36 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         return False
 
+    def isAnyPointExcluded(self, *xyPairs):
+        """
+        Test whether any point in a list of x,y coordinate pairs is contained in an excluded region.
+
+        Parameters
+        ----------
+        xyPairs : List of x,y pairs
+            List containing an even number of float values.  Each value at an even index
+            (0, 2, 4, etc) is an x coordinate, and each odd indexed value is a y coordinate.
+            The first point is comprised of the x value at index 0 and the y value at index 1,
+            and so on.
+
+        Returns
+        -------
+        boolean
+            True if any point in the list is contained in an excluded region, False otherwise.
+        """
+        if (self._exclusionEnabled):
+            xAxis = self.position.X_AXIS
+            yAxis = self.position.Y_AXIS
+
+            for index in range(0, len(xyPairs), 2):
+                x = xAxis.setLogicalPosition(xyPairs[index])
+                y = yAxis.setLogicalPosition(xyPairs[index + 1])
+
+                if (self.isPointExcluded(x, y)):
+                    return True
+
+        return False
+
     def isExclusionEnabled(self):
         """Whether exclusion is currently enabled (True) or disabled (False)."""
         return self._exclusionEnabled
@@ -315,37 +345,38 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         else:
             self._logger.debug("Exclusion already enabled, NOP: context=%s", context)
 
-    def isAnyPointExcluded(self, *xyPairs):
+    def setUnitMultiplier(self, unitMultiplier):
         """
-        Test whether any point in a list of x,y coordinate pairs is contained in an excluded region.
+        Set the conversion factor from logical units to native units (G20, G21).
 
         Parameters
         ----------
-        xyPairs : List of x,y pairs
-            List containing an even number of float values.  Each value at an even index
-            (0, 2, 4, etc) is an x coordinate, and each odd indexed value is a y coordinate.
-            The first point is comprised of the x value at index 0 and the y value at index 1,
-            and so on.
-
-        Returns
-        -------
-        boolean
-            True if any point in the list is contained in an excluded region, False otherwise.
+        unitMultiplier : float
+            The new unit multiplier to use for converting between logical and native units.
         """
-        exclude = False
+        self.feedRateUnitMultiplier = unitMultiplier
+        self.position.setUnitMultiplier(unitMultiplier)
 
-        if (self._exclusionEnabled):
-            xAxis = self.position.X_AXIS
-            yAxis = self.position.Y_AXIS
+    def setAbsoluteMode(self, absolute):
+        """
+        Set absolute mode for the X, Y, and Z axes, and optionally the E axis.
 
-            for index in range(0, len(xyPairs), 2):
-                x = xAxis.setLogicalPosition(xyPairs[index])
-                y = yAxis.setLogicalPosition(xyPairs[index + 1])
+        The mode for the E axis will only be updated if the g90InfluencesExtruder property is set
+        to True.
 
-                if (not exclude and self.isPointExcluded(x, y)):
-                    exclude = True
+        Parameters
+        ----------
+        absolute : boolean
+            Whether to enable absolute mode or not.
+        """
+        self.position.setPositionAbsoluteMode(absolute)
+        if (self.g90InfluencesExtruder):
+            self.position.setExtruderAbsoluteMode(absolute)
 
-        return exclude
+    def ignoreGcodeCommand(self):
+        """Add one to the excluded Gcode count and return IGNORE_GCODE_CMD."""
+        self.numExcludedCommands += 1
+        return IGNORE_GCODE_CMD
 
     def recordRetraction(self, retract, returnCommands):
         """
@@ -832,33 +863,3 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         # Otherwise, let the command process normally
         return None
-
-    def setUnitMultiplier(self, unitMultiplier):
-        """
-        Set the conversion factor from logical units to native units (G20, G21).
-
-        Parameters
-        ----------
-        unitMultiplier : float
-            The new unit multiplier to use for converting between logical and native units.
-        """
-        self.feedRateUnitMultiplier = unitMultiplier
-        self.position.setUnitMultiplier(unitMultiplier)
-
-    def setAbsoluteMode(self, absolute):
-        """
-        Set absolute mode for the X, Y, and Z axes, and optionally the E axis.
-
-        Parameters
-        ----------
-        absolute : boolean
-            Whether to enable absolute mode or not.
-        """
-        self.position.setPositionAbsoluteMode(absolute)
-        if (self.g90InfluencesExtruder):
-            self.position.setExtruderAbsoluteMode(absolute)
-
-    def ignoreGcodeCommand(self):
-        """Add one to the excluded Gcode count and return IGNORE_GCODE_CMD."""
-        self.numExcludedCommands += 1
-        return IGNORE_GCODE_CMD

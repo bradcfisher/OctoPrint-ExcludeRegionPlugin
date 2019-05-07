@@ -4,8 +4,8 @@
 from __future__ import absolute_import
 from builtins import str
 
-import unittest
 import collections
+import unittest
 import warnings
 
 

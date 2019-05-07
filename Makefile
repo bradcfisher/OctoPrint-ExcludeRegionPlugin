@@ -82,6 +82,7 @@ $(SERVE_DEPS_INSTALLED): $(COMMON_DEPS_INSTALLED)
 clear-deps-installed:
 	rm -f $(TESTENV_DEPS_INSTALLED)
 	rm -f $(SERVE_DEPS_INSTALLED)
+	rm -f $(COMMON_DEPS_INSTALLED)
 
 refresh-dependencies: clear-deps-installed $(TESTENV)
 
@@ -99,7 +100,7 @@ clean:
 
 # If the PATTERN is different than the last coverage run, removes the coverage data file
 check-coverage-pattern:
-	@if [ -f $(COVERAGE_PATTERN_FILE) ]; then \
+	-@if [ -f $(COVERAGE_PATTERN_FILE) ]; then \
 	  if [ "`cat $(COVERAGE_PATTERN_FILE)`" != "$(TEST_PATTERN)" ]; then \
 	    rm $(COVERAGE_FILE) ; \
 	  fi ; \
