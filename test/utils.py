@@ -8,6 +8,41 @@ import collections
 import unittest
 import warnings
 
+from callee import Matcher
+
+
+class FloatAlmostEqual(Matcher):
+    """callee.Matcher subclass to test if a mock.call argument is almost equal to a value."""
+
+    def __init__(self, value, places=None, delta=None):
+        """Initialize object properties."""
+        super(FloatAlmostEqual, self).__init__()
+
+        value = float(value)
+        if (delta is None):
+            places = 7 if (places is None) else int(places)
+        elif (places is not None):
+            raise TypeError("Cannot specify both places and delta")
+
+        if (delta is None):
+            value = round(value, places)
+            self._comparison = lambda other: (round(other, places) == value)
+            self._reprStr = "<equal to %s rounded to %s places>" % (value, places)
+        else:
+            delta = abs(float(delta))
+            minValue = value - delta
+            maxValue = value + delta
+            self._comparison = lambda other: minValue <= other <= maxValue
+            self._reprStr = "<between %s and %s>" % (minValue, maxValue)
+
+    def match(self, value):
+        """Apply the comparison function to the provided value."""
+        return self._comparison(value)
+
+    def __repr__(self):
+        """Return a string representation of this object."""
+        return self._reprStr
+
 
 class TestCase(unittest.TestCase):
     """Enhanced untttest.TestCase subclass providing additional asserts and deprecation warnings."""

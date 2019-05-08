@@ -69,10 +69,10 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
     position : Position
         Current axis position, home offsets (M206), offsets (G92) and absolute or relative mode.
     feedRate : float
-        Current feed rate.
+        Current feed rate in native units/minute.
     feedRateUnitMultiplier : float
-        Unit multiplier to apply to feed rate for converting logical units (inches, etc) to native
-        units (mm).
+        Unit multiplier to apply to feed rate for converting logical units (inches/min, etc) to
+        native units (mm/min).
     _exclusionEnabled : boolean
         Whether exclusion is currently enabled or not (default True/enabled).  May be controlled
         through At-Commands embedded in the Gcode file or sent via terminal.
@@ -252,9 +252,9 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         Parameters
         ----------
         x : float
-            The x coordinate of the point to test
+            The x coordinate of the point to test, in physical units
         y : float
-            The y coordinate of the point to test
+            The y coordinate of the point to test, in physical units
 
         Returns
         -------
@@ -275,10 +275,10 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         Parameters
         ----------
         xyPairs : List of x,y pairs
-            List containing an even number of float values.  Each value at an even index
-            (0, 2, 4, etc) is an x coordinate, and each odd indexed value is a y coordinate.
-            The first point is comprised of the x value at index 0 and the y value at index 1,
-            and so on.
+            List containing an even number of float values, in logical coordinate units.  Each
+            value at an even index (0, 2, 4, etc) is an x coordinate, and each odd indexed value
+            is a y coordinate.  The first point is comprised of the x value at index 0 and the y
+            value at index 1, and so on.
 
         Returns
         -------
@@ -575,18 +575,19 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         cmd : string
             The original Gcode command that produced the move being processed.
         extruderPosition : float | None
-            The ending extruder position of the sequence of moves.  If None, the current extruder
-            position is not updated.
+            The ending extruder position of the sequence of moves, in logical units.  If None, the
+            current extruder position is not updated.
         feedRate : float | None
-            The feed rate value specified for the move.  If None, the current feed rate is used.
+            The feed rate value specified for the move, in logical units/minute.  If None, the
+            current feed rate is used.
         finalZ : float | None
-            The ending z position of the sequence of moves.  If None, the current z position is
-            not updated.
+            The ending z position of the sequence of moves, in logical units.  If None, the current
+            z position is not updated.
         xyPairs : List of x,y pairs
-            List containing an even number of float (or None) values.  Each value at an even index
-            (0, 2, 4, etc) is an x coordinate, and each odd indexed value is a y coordinate.
-            The first point is comprised of the x value at index 0 and the y value at index 1,
-            and so on.
+            List containing an even number of float (or None) values, in logical units.  Each value
+            at an even index (0, 2, 4, etc) is an x coordinate, and each odd indexed value is a y
+            coordinate.  The first point is comprised of the x value at index 0 and the y value at
+            index 1, and so on.
 
         Returns
         -------

@@ -540,6 +540,9 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             "(10,10) should NOT be excluded (exclusion disabled)"
         )
 
+    # TODO: Test that isPointExcluded is not affected by the logical coordinate units in effect
+    # TODO: Test that isAnyPointExcluded _IS_ affected by the logical coordinate units in effect
+
     def test_isAnyPointExcluded_noArguments(self):
         """Test the isAnyPointExcluded method when no arguments are provided."""
         mockLogger = mock.Mock()
