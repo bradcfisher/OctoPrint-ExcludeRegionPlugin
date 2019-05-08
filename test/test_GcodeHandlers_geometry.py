@@ -11,7 +11,7 @@ from octoprint_excluderegion.GcodeHandlers import GcodeHandlers, MM_PER_ARC_SEGM
 from .utils import TestCase
 
 
-class GcodeHandlersTests(TestCase):
+class GcodeHandlersGeometryTests(TestCase):
     """Unit tests for the geometry code in the GcodeHandlers class."""
 
     @staticmethod
@@ -158,25 +158,23 @@ class GcodeHandlersTests(TestCase):
             )
         )
 
-    # TODO: Verify planArc when provided with a negative radius
-
     def test_planArc_clockwise_semicircle(self):
-        """Tests the planArc method with a clockwise semicircular 100 unit arc centered at (0,0)."""
+        """Tests the planArc method with a clockwise 100 unit quarter turn arc centered at (0,0)."""
         arcRadius = 50
 
         mockLogger = mock.Mock()
 
         mockState = mock.Mock()
-        mockState.position.X_AXIS.nativeToLogical.return_value = -arcRadius
+        mockState.position.X_AXIS.nativeToLogical.return_value = arcRadius
         mockState.position.Y_AXIS.nativeToLogical.return_value = 0
 
         unit = GcodeHandlers(mockState, mockLogger)
 
-        result = unit.planArc(arcRadius, 0, arcRadius, 0, True)
+        result = unit.planArc(0, -arcRadius, -arcRadius, 0, True)
 
         self._assert_planArc_commonResultProperties(
-            start=(-arcRadius, 0),
-            end=(arcRadius, 0),
+            start=(arcRadius, 0),
+            end=(0, -arcRadius),
             center=(0, 0),
             radius=arcRadius,
             items=result
@@ -188,24 +186,24 @@ class GcodeHandlersTests(TestCase):
         self._assert_planArc_axisProperties(
             coordinateOffset=1,
             initialValue=0,
-            initialDirection=1,
-            expectedReversals=1,
+            initialDirection=-1,
+            expectedReversals=0,
             items=result,
             filterFunc=lambda x, y, direction, index: (
                 self.assertTrue(
-                    y >= 0,
-                    "Each y coordinate should be on or above the Y axis" +
+                    y <= 0,
+                    "Each y coordinate should be on or below the Y axis" +
                     ": pt=(%s, %s) index=%s" % (x, y, index)
                 )
             )
         )
 
         # x value comparisons
-        # - the x component of each point should increase for each point
+        # - the x component of each point should decrease for each point
         self._assert_planArc_axisProperties(
             coordinateOffset=0,
-            initialValue=-arcRadius,
-            initialDirection=1,
+            initialValue=arcRadius,
+            initialDirection=-1,
             expectedReversals=0,
             items=result
         )
@@ -499,6 +497,24 @@ class GcodeHandlersTests(TestCase):
         result = unit.computeArcCenterOffsets(10, 10, 0, True)
 
         self.assertEqual(result, (0, 0), "No offset should be computed when the radius is 0")
+
+    def test_computeArcCenterOffsets_radiusTooSmall(self):
+        """Test computeArcCenterOffsets when the radius is less than half the chord length."""
+        mockLogger = mock.Mock()
+
+        mockState = mock.Mock()
+        mockState.position.X_AXIS.nativeToLogical.return_value = 0
+        mockState.position.Y_AXIS.nativeToLogical.return_value = 0
+
+        unit = GcodeHandlers(mockState, mockLogger)
+
+        # Try chord length 10, radius 4
+        result = unit.computeArcCenterOffsets(10, 0, 4, True)
+
+        self.assertEqual(
+            result, (0, 0),
+            "No offset should be computed if the radius is less than half the chord length."
+        )
 
     def test_computeArcCenterOffsets_circle(self):
         """Test the computeArcCenterOffsets method when the start and end points are identical."""

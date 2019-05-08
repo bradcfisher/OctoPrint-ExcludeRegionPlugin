@@ -101,7 +101,7 @@ class GcodeHandlers(object):
             angularTravel = TWO_PI
 
         # Compute the number of segments to produce based on the length of the arc
-        arcLength = angularTravel * radius
+        arcLength = abs(angularTravel) * radius
         numSegments = int(math.ceil(arcLength / MM_PER_ARC_SEGMENT))
 
         angle = math.atan2(-j, -i)
@@ -259,7 +259,7 @@ class GcodeHandlers(object):
         """
         return self._handle_G0(cmd, gcode, subcode)
 
-    def _handle_G2(self, cmd, gcode, subcode=None):  # pylint: disable=unused-argument,invalid-name
+    def _handle_G2(self, cmd, gcode, subcode=None):  # noqa: C901,unused-argument,invalid-name
         """
         G2 - Controlled Arc Move (Clockwise).
 
@@ -296,9 +296,9 @@ class GcodeHandlers(object):
                     feedRate = value
                 elif (label == "R"):
                     radius = value
-                if (label == "I"):
+                elif (label == "I"):
                     i = value
-                if (label == "J"):
+                elif (label == "J"):
                     j = value
 
         # Based on Marlin 1.1.8
@@ -331,7 +331,7 @@ class GcodeHandlers(object):
         cmdArgs = REGEX_SPLIT.split(cmd)
         for index in range(1, len(cmdArgs)):
             argType = cmdArgs[index][0].upper()
-            if (argType == "P") or (argType == "L"):
+            if (argType in ("P", "L")):
                 return None
 
         self._logger.debug("_handle_G10: firmware retraction: cmd=%s", cmd)
@@ -485,7 +485,13 @@ class GcodeHandlers(object):
                     elif (entry.action == DISABLE_EXCLUSION):
                         for command in self.state.disableExclusion(cmd + " " + parameters):
                             self._logger.debug(
-                                "handleAtCommand: sending Gcode command to printer: cmd=%s",
+                                "handleAtCommand: sending Gcode command to printer: %s",
                                 command
                             )
                             commInstance.sendCommand(command)
+                    else:
+                        self._logger.warn(
+                            "handleAtCommand: unsupported action configuration encountered" +
+                            ": action=%s, cmd=%s, parameters=%s",
+                            entry.action, cmd, parameters
+                        )
