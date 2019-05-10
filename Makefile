@@ -134,9 +134,17 @@ doc: $(TESTENV_DEPS_INSTALLED) $(SOURCE_FILES) $(DOC_FILES)
 lint: lint-source lint-tests
 
 lint-source: $(TESTENV_DEPS_INSTALLED) $(SOURCE_FILES) $(TEST_FILES)
+ifneq ($(strip $(LINT_SOURCE_FILES)),)
 	-. $(ACTIVATE_TESTENV) && pylama $(LINT_SOURCE_FILES)
+else
+	@echo "lint-source: No source files match specified pattern"
+endif
 
 lint-tests: $(TESTENV_DEPS_INSTALLED) $(SOURCE_FILES) $(TEST_FILES)
+ifneq ($(strip $(LINT_TEST_FILES)),)
 	-. $(ACTIVATE_TESTENV) && pylama $(LINT_TEST_FILES)
+else
+	@echo "lint-tests: No test files match specified pattern"
+endif
 
 .PHONY: help clean test serve clear-deps-installed refresh-dependencies coverage coverage-report clean-coverage-report check-coverage-pattern doc lint lint-source lint-tests

@@ -103,9 +103,9 @@ class TestCase(unittest.TestCase):
         if (not isinstance(value, str)):
             raise AssertionError(self._msg(value, "Value is not a string", msg))
 
-    def assertProperties(self, value, expectedProperties, msg=None):
+    def assertProperties(self, value, expectedProperties, required=True, exclusive=True, msg=None):
         """
-        Ensure that only the expected properties are defined.
+        Ensure a dictionary has specific properties defined and/or doesn't have other properties.
 
         Parameters
         ----------
@@ -113,6 +113,13 @@ class TestCase(unittest.TestCase):
             The dictionary to test the properties for
         expectedProperties : list
             The property names to check
+        required : boolean
+            Whether all of the specified properties must be present or not.  If True (the default),
+            an AssertionError will be raised if any of the expectedProperties are not found.
+        exclusive : boolean
+            Whether only the specified properties are permitted.  If True (the default), an
+            AssertionError will be raised if any property other than one in expectedProperties is
+            encountered.
         msg : string | None
             Custom assertion error message
 
@@ -122,6 +129,9 @@ class TestCase(unittest.TestCase):
             If the specified value is not a dictionary, or the dictionary does not contain exactly
             the specified property key names.
         """
+        if (not (required or exclusive)):
+            raise ValueError("You must specify True for at least one of required or exclusive")
+
         msg = self._msg(value, "Object properties do not match expectations", msg)
 
         if (isinstance(value, collections.Mapping)):
@@ -130,14 +140,16 @@ class TestCase(unittest.TestCase):
             propertiesDict = vars(value)
 
         missing = []
-        for prop in expectedProperties:
-            if (prop not in propertiesDict):
-                missing.append(prop)
+        if (required):
+            for prop in expectedProperties:
+                if (prop not in propertiesDict):
+                    missing.append(prop)
 
         unexpected = []
-        for prop in iter(propertiesDict):
-            if (prop not in expectedProperties):
-                unexpected.append(prop)
+        if (exclusive):
+            for prop in iter(propertiesDict):
+                if (prop not in expectedProperties):
+                    unexpected.append(prop)
 
         if (missing or unexpected):
             sep = ": "

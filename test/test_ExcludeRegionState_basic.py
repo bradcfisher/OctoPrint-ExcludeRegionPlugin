@@ -1,5 +1,5 @@
 # coding=utf-8
-"""Unit tests for the ExcludeRegionState class."""
+"""Unit tests for the basic functionality of the ExcludeRegionState class."""
 
 from __future__ import absolute_import
 
@@ -15,8 +15,8 @@ from octoprint_excluderegion.CircularRegion import CircularRegion
 from .utils import TestCase
 
 
-class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-methods
-    """Unit tests for the ExcludeRegionState class."""
+class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public-methods
+    """Unit tests for the basic functionality of the ExcludeRegionState class."""
 
     expectedProperties = [
         "_logger", "g90InfluencesExtruder", "enteringExcludedRegionGcode",
@@ -104,7 +104,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
 
         self._assert_default_resetState_properties(unit)
 
-        self.assertProperties(unit, ExcludeRegionStateTests.expectedProperties)
+        self.assertProperties(unit, ExcludeRegionStateBasicTests.expectedProperties)
 
     def test_constructor_no_logger(self):
         """Test the constructor when no logger is provided."""

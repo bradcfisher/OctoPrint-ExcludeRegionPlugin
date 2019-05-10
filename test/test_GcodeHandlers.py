@@ -24,6 +24,7 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods, 
         unit = GcodeHandlers(mockState, mockLogger)
 
         self.assertIsInstance(unit, GcodeHandlers)
+        self.assertProperties(unit, GcodeHandlersTests.expectedProperties)
         self.assertIs(unit._logger, mockLogger, "The logger should match the instance passed in")
         self.assertIs(unit.state, mockState, "The state should match the instance passed in")
 

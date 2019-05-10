@@ -123,12 +123,12 @@ class ExcludeRegionPlugin(
         The actual initialization is performed by the initialize method.
         """
         self._activePrintJob = None
+        self._loggingMode = None
+        self._pluginLoggingHandler = None
         self.clearRegionsAfterPrintFinishes = None
         self.mayShrinkRegionsWhilePrinting = None
         self.state = None
         self.gcodeHandlers = None
-        self._loggingMode = None
-        self._pluginLoggingHandler = None
         super(ExcludeRegionPlugin, self).__init__()
 
     def initialize(self):
@@ -144,7 +144,10 @@ class ExcludeRegionPlugin(
         self._handleSettingsUpdated()
         self._notifyExcludedRegionsChanged()
 
-        self._logger.debug("Plugin initialization complete")
+        self._logger.debug(
+            "Initialization complete: Installed plugin version=%s",
+            self._plugin_version
+        )
 
     def getUpdateInformation(self):
         """Return the information necessary for OctoPrint to check for new plugin versions."""
@@ -243,19 +246,24 @@ class ExcludeRegionPlugin(
         """Return the plugin settings version supported by this version of the plugin."""
         return 1
 
-    def on_settings_migrate(self, target, current):
+    def get_settings_preprocessors(self):
         """
-        Migrate settings from current (old) version to target (new) version.
+        Return setting preprocessors to invoke when setting/getting setting values.
 
-        Parameters
-        ----------
-        target : int
-            The settings version to migrate to (should be identical to get_settings_version())
-        current : int | None
-            The settings version to migrate from (or None if there are no current settings)
+        This method defines preprocessors for setting the 'extendedExcludeGcodes' and
+        'atCommandActions' settings to ensure the lists are stored in sorted order.
         """
-        # There is currently no setting migration necessary
-        return
+        return (
+            # preprocessors for setters
+            {
+                "extendedExcludeGcodes":
+                    lambda value: sorted(value, key=lambda item: item["gcode"].upper()),
+                "atCommandActions":
+                    lambda value: sorted(value, key=lambda item: item["command"].upper())
+            },
+            # preprocessors for getters
+            {}
+        )
 
     # ~~ SimpleApiPlugin
 
@@ -426,11 +434,18 @@ class ExcludeRegionPlugin(
 
     # ~~ ExcludeRegionPlugin
 
+    @property
     def isActivePrintJob(self):
         """Whether a print is currently in progress or not."""
         return self._activePrintJob
 
-    def setLoggingMode(self, loggingMode):
+    @property
+    def loggingMode(self):
+        """Return the current logging mode."""
+        return self._loggingMode
+
+    @loggingMode.setter
+    def loggingMode(self, loggingMode):
         """
         Set a new logging mode for the plugin.
 
@@ -442,6 +457,9 @@ class ExcludeRegionPlugin(
         """
         if (self._loggingMode == loggingMode):
             return
+
+        if (loggingMode not in (LOG_MODE_DEDICATED, LOG_MODE_OCTOPRINT, LOG_MODE_BOTH)):
+            raise AttributeError("Invalid mode value")
 
         if (self._loggingMode is not None):
             # Write a message to the previous log if a mode has been previously set
@@ -510,7 +528,7 @@ class ExcludeRegionPlugin(
             Returns None if the operation was successful, and an error status tuple if the region
             cannot be deleted.
         """
-        if (not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()):
+        if (not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob):
             return "Cannot delete region while printing", 409
 
         if (self.state.deleteRegion(idToDelete)):
@@ -537,7 +555,7 @@ class ExcludeRegionPlugin(
         try:
             self.state.replaceRegion(
                 newRegion,
-                not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob()
+                not self.mayShrinkRegionsWhilePrinting and self.isActivePrintJob
             )
             self._notifyExcludedRegionsChanged()
             return None
@@ -649,7 +667,7 @@ class ExcludeRegionPlugin(
                 entry.append(val)
         self.state.atCommandActions = atCommandActions
 
-        self.setLoggingMode(self._settings.get(["loggingMode"]))
+        self.loggingMode = self._settings.get(["loggingMode"])
 
         self._logger.info(
             "Setting update detected: g90InfluencesExtruder=%s, " +
@@ -665,9 +683,8 @@ class ExcludeRegionPlugin(
             extendedExcludeGcodes, atCommandActions
         )
 
-    # pylint: disable=invalid-name,too-many-arguments,unused-argument
-    def handleGcodeQueuing(
-            self, comm_instance, phase, cmd, cmd_type, gcode, subcode=None, tags=None
+    def handleGcodeQueuing(  # pylint: disable=too-many-arguments,unused-argument
+            self, commInstance, phase, cmd, cmdType, gcode, subcode=None, tags=None
     ):
         """Gcode processing handler for octoprint.comm.protocol.gcode.queuing plugin hook."""
         if (gcode):
@@ -676,28 +693,28 @@ class ExcludeRegionPlugin(
         if (self._logger.isEnabledFor(logging.DEBUG)):
             self._logger.debug(
                 "handleGcodeQueuing: " +
-                "phase=%s, cmd=%s, cmd_type=%s, gcode=%s, subcode=%s, tags=%s, " +
+                "phase=%s, cmd=%s, cmdType=%s, gcode=%s, subcode=%s, tags=%s, " +
                 "(isActivePrintJob=%s, isExclusionEnabled=%s, excluding=%s)",
-                phase, cmd, cmd_type, gcode, subcode, tags,
-                self.isActivePrintJob(), self.state.isExclusionEnabled(),
+                phase, cmd, cmdType, gcode, subcode, tags,
+                self.isActivePrintJob, self.state.isExclusionEnabled(),
                 self.state.excluding
             )
 
-        if (gcode and self.isActivePrintJob()):
+        if (gcode and self.isActivePrintJob):
             return self.gcodeHandlers.handleGcode(cmd, gcode, subcode)
 
         return None
 
-    def handleAtCommandQueuing(self, comm_instance, phase, cmd, parameters, tags=None):
+    def handleAtCommandQueuing(self, commInstance, phase, cmd, parameters, tags=None):
         """Command processing handler for octoprint.comm.protocol.atcommand.queuing plugin hook."""
         self._logger.debug(
             "handleAtCommandQueuing: " +
             "phase=%s, command=%s, parameters=%s, tags=%s, " +
             "(isActivePrintJob=%s, isExclusionEnabled=%s, excluding=%s)",
             phase, cmd, parameters, tags,
-            self.isActivePrintJob(), self.state.isExclusionEnabled(),
+            self.isActivePrintJob, self.state.isExclusionEnabled(),
             self.state.excluding
         )
 
-        if (self.isActivePrintJob()):
-            self.gcodeHandlers.handleAtCommand(comm_instance, cmd, parameters)
+        if (self.isActivePrintJob):
+            self.gcodeHandlers.handleAtCommand(commInstance, cmd, parameters)
