@@ -480,7 +480,10 @@ class ExcludeRegionPlugin(
                 )
                 self._pluginLoggingHandler.setLevel(logging.DEBUG)
 
-            self._logger.addHandler(self._pluginLoggingHandler)
+            if (self._loggingMode == LOG_MODE_OCTOPRINT):
+                # Any other mode means the handler is already added
+                self._logger.addHandler(self._pluginLoggingHandler)
+
             self._logger.propagate = (loggingMode == LOG_MODE_BOTH)
         elif (self._pluginLoggingHandler is not None):  # LOG_MODE_OCTOPRINT
             self._logger.removeHandler(self._pluginLoggingHandler)
@@ -687,9 +690,6 @@ class ExcludeRegionPlugin(
             self, commInstance, phase, cmd, cmdType, gcode, subcode=None, tags=None
     ):
         """Gcode processing handler for octoprint.comm.protocol.gcode.queuing plugin hook."""
-        if (gcode):
-            gcode = gcode.upper()
-
         if (self._logger.isEnabledFor(logging.DEBUG)):
             self._logger.debug(
                 "handleGcodeQueuing: " +

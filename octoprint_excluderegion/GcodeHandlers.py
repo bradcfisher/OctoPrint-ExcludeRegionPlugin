@@ -213,6 +213,8 @@ class GcodeHandlers(object):
             If the command should be processed normally, returns None, otherwise returns one or
             more Gcode commands to execute instead or IGNORE_GCODE_CMD to prevent processing.
         """
+        gcode = gcode.upper()
+
         self.state.numCommands += 1
         method = getattr(self, "_handle_" + gcode, self.state.processExtendedGcode)
         return method(cmd, gcode, subcode)
