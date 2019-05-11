@@ -356,7 +356,7 @@ class GcodeHandlers(object):
 
         S parameter is for Repetier (0 = short unretract, 1 = long unretract)
         """
-        returnCommands = self.state.recoverRetractionIfNeeded(None, cmd, True)
+        returnCommands = self.state.recoverRetractionIfNeeded(cmd, True)
         if (returnCommands is None):
             return self.state.ignoreGcodeCommand()
 

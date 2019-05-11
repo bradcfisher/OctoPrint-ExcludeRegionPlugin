@@ -556,7 +556,7 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit._handle_G11("G11", "G11", None)  # pylint: disable=protected-access
 
-        unit.state.recoverRetractionIfNeeded.assert_called_with(None, "G11", True)
+        unit.state.recoverRetractionIfNeeded.assert_called_with("G11", True)
         unit.state.ignoreGcodeCommand.assert_called()
 
         self.assertEqual(result, "ignore", "The result of ignoreGcodeCommand should be returned.")
@@ -570,7 +570,7 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit._handle_G11("G11", "G11", None)  # pylint: disable=protected-access
 
-        unit.state.recoverRetractionIfNeeded.assert_called_with(None, "G11", True)
+        unit.state.recoverRetractionIfNeeded.assert_called_with("G11", True)
         unit.state.ignoreGcodeCommand.assert_not_called()
 
         self.assertEqual(

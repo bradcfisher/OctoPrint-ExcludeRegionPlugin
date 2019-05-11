@@ -2,7 +2,11 @@
 """Module providing the RetractionState class."""
 
 from __future__ import absolute_import
+import re
 from .CommonMixin import CommonMixin
+
+# Regular expression for extracting the parameters from a Gcode command
+GCODE_PARAMS_REGEX = re.compile("^[A-Za-z][0-9]+(?:\\.[0-9]+)?\\s*(.*)$")
 
 
 class RetractionState(CommonMixin):
@@ -130,10 +134,12 @@ class RetractionState(CommonMixin):
             returnCommands = []
 
         if (self.firmwareRetract):
-            if (direction == -1):
-                returnCommands.append("G11")
-            else:
-                returnCommands.append("G10")
+            cmd = "G11" if (direction == -1) else "G10"
+            params = GCODE_PARAMS_REGEX.sub("\\1", self.originalCommand)
+            if (params):
+                cmd += " " + params
+
+            returnCommands.append(cmd)
         else:
             amount = self.extrusionAmount * direction
             eAxis = position.E_AXIS

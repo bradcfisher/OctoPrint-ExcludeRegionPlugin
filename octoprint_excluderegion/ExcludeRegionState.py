@@ -420,7 +420,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             if (not self.lastRetraction.firmwareRetract):
                 self.lastRetraction.feedRate = self.feedRate
         else:
-            # This is an additonal retraction that hasn't had its recovery excluded
+            # This is an additional retraction that hasn't had its recovery excluded
             # It doesn't seem like this should occur in a well-formed file
             # Since it's not expected, log it and let it pass through
             self._logger.debug(
@@ -442,21 +442,22 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         return returnCommands
 
-    def _recoverRetraction(self, returnCommands, cmd, firmwareRecovery):
+    def _recoverRetraction(self, cmd, isRecoveryCommand, returnCommands):
         """
         Execute a recovery for a previously executed retraction (if any).
 
-        If a cmd is provided, it will be appended at the end of the returned list of Gcodes.
+        The provided command will be appended at the end of the returned list of Gcodes.
 
         Parameters
         ----------
+        cmd : string
+            The gcode the retraction is being recovered for.
+        isRecoveryCommand : boolean
+            Whether the triggering command is a recovery (G11 or G0/G1 with no X/Y/Z component)
+            [True], or an extruding move (G0/G1 with some X/Y/Z component) [False].
         returnCommands : List of Gcode commands | None
             The Gcode command list to append any new command(s) to.  If None, a new list will be
             created.
-        cmd : string | None
-            The gcode the retraction is being recovered for.
-        firmwareRecovery : boolean | None
-            Whether to request a firmware recovery (G11) or not.
 
         Returns
         -------
@@ -480,28 +481,27 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         self.lastRetraction = None
 
-        # Execute the command
-        if (cmd is not None):
-            if (firmwareRecovery is not None) and lastRetraction.recoverExcluded:
-                # The command is a recovery (not an extruding move), but we just recovered from a
-                # previous retraction.  That should indicate multiple recoveries without an
-                # intervening retraction.
-                # This isn't really an expected case, so log it
-                self._logger.info(
-                    "Recovery encountered immediately following a pending recovery " +
-                    "action: cmd=%s, lastRetraction=%s",
-                    cmd, lastRetraction
-                )
+        if (isRecoveryCommand and lastRetraction.recoverExcluded):
+            # The command is a recovery (not an extruding move), but we just recovered from a
+            # previous retraction.  That should indicate multiple recoveries without an
+            # intervening retraction.
+            # This isn't really an expected case, so log it
+            self._logger.info(
+                "Recovery encountered immediately following a pending recovery " +
+                "action: cmd=%s, lastRetraction=%s",
+                cmd, lastRetraction
+            )
 
-            if (returnCommands is not None):
-                returnCommands.append(cmd)
-            else:
-                returnCommands = [cmd]
+        # Execute the command
+        if (returnCommands is not None):
+            returnCommands.append(cmd)
+        else:
+            returnCommands = [cmd]
 
         return returnCommands
 
     def recoverRetractionIfNeeded(
-            self, returnCommands=None, cmd=None, firmwareRecovery=None
+            self, cmd, isRecoveryCommand, returnCommands=None
     ):
         """
         Execute a recovery for a previously executed retraction if one is needed.
@@ -514,14 +514,19 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         Parameters
         ----------
+        cmd : string
+            The gcode the retraction is being recovered for.
         returnCommands : List of Gcode commands | None
             The Gcode command list to append any new command(s) to.  If None, a new list will be
             created.
-        cmd : string | None
-            The gcode the retraction is being recovered for.
+        isRecoveryCommand : boolean
+            Whether the triggering command is a recovery (G11 or G0/G1 with no X/Y/Z component)
+            [True], or an extruding move (G0/G1 with some X/Y/Z component) [False].
+
         firmwareRecovery : boolean | None
-            Whether to request a firmware recovery (G11) [True], a non-firmware recovery (G0/G1 with
-            no X/Y/Z component) [False], or an extruding move (G0/G1 with X/Y/Z component) [None].
+            Whether the triggering command is a firmware recovery (G11) [True], a non-firmware
+            recovery (G0/G1 with no X/Y/Z component) [False], or an extruding move (G0/G1 with
+            X/Y/Z component) [None].
 
         Returns
         -------
@@ -535,14 +540,14 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
                 # If excluding, and encountered a recovery (not an extruding move), then update the
                 # current retraction state to indicate the retraction should be automatically
                 # recovered after exiting the excluded region.
-                if (firmwareRecovery is not None):
+                if (isRecoveryCommand):
                     self.lastRetraction.recoverExcluded = True
             else:
                 # If not excluding, then execute any needed recovery commands and then the
                 # provided cmd
-                self._recoverRetraction(returnCommands, cmd, firmwareRecovery)
-        elif (not self.excluding and (cmd is not None)):
-            if (firmwareRecovery is not None):
+                self._recoverRetraction(cmd, isRecoveryCommand, returnCommands)
+        elif (not self.excluding):
+            if (isRecoveryCommand):
                 # This is a recovery that doesn't correspond to a previous retraction
                 # It doesn't seem like this should occur (often) in a well-formed file.
                 # Cura generates one at the start of the file to prime the nozzle, but doesn't seem
@@ -558,7 +563,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             else:
                 returnCommands = [cmd]
 
-        if (firmwareRecovery is not None):
+        if (isRecoveryCommand):
             self._logger.debug(
                 "recovery: excluding=%s, cmd=%s, returnCommands=%s",
                 self.excluding, cmd, returnCommands
@@ -650,7 +655,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
                 )
             elif (deltaE > 0):
                 # recovery
-                returnCommands = self.recoverRetractionIfNeeded(returnCommands, cmd, False)
+                returnCommands = self.recoverRetractionIfNeeded(cmd, True, returnCommands)
             elif (not self.excluding):
                 # something else (no move, no extrude, probably just setting feedrate)
                 returnCommands = [cmd]
@@ -663,7 +668,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             if (deltaE > 0):
                 # Recover any retraction recorded from the excluded region before the next
                 # extrusion occurs
-                returnCommands = self.recoverRetractionIfNeeded(returnCommands, cmd)
+                returnCommands = self.recoverRetractionIfNeeded(cmd, False, returnCommands)
             else:
                 returnCommands = [cmd]
 

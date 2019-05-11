@@ -69,9 +69,9 @@ class RetractionStateTests(TestCase):
         with self.assertRaises(ValueError):
             RetractionState(firmwareRetract=True, extrusionAmount=1, feedRate=100)
 
-    def test_addRetractCommands_firmware(self):
+    def test_addRetractCommands_firmware_noParams(self):
         """Test the addRetractCommands method on a firmware retraction instance."""
-        unit = RetractionState(firmwareRetract=True)
+        unit = RetractionState(firmwareRetract=True, originalCommand="G10")
         position = Position()
 
         returnCommands = unit.addRetractCommands(position, None)
@@ -84,9 +84,24 @@ class RetractionStateTests(TestCase):
         )
         self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
 
-    def test_addRecoverCommands_firmware(self):
+    def test_addRetractCommands_firmware_withParams(self):
+        """Test the addRetractCommands method on a firmware retraction instance with parameters."""
+        unit = RetractionState(firmwareRetract=True, originalCommand="G11 S1")
+        position = Position()
+
+        returnCommands = unit.addRetractCommands(position, None)
+        self.assertEqual(returnCommands, ["G10 S1"], "The returned list should be ['G10 S1']")
+        self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
+
+        returnCommands = unit.addRetractCommands(position, ["ABC"])
+        self.assertEqual(
+            returnCommands, ["ABC", "G10 S1"], "The returned list should be ['ABC', 'G10 S1']"
+        )
+        self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
+
+    def test_addRecoverCommands_firmware_noParams(self):
         """Test the addRecoverCommands method on a firmware retraction instance."""
-        unit = RetractionState(firmwareRetract=True)
+        unit = RetractionState(firmwareRetract=True, originalCommand="G10")
         position = Position()
 
         returnCommands = unit.addRecoverCommands(position, None)
@@ -96,6 +111,21 @@ class RetractionStateTests(TestCase):
         returnCommands = unit.addRecoverCommands(position, ["ABC"])
         self.assertEqual(
             returnCommands, ["ABC", "G11"], "The returned list should be ['ABC', 'G11']"
+        )
+        self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
+
+    def test_addRecoverCommands_firmware_withParams(self):
+        """Test the addRecoverCommands method on a firmware retraction instance with parameters."""
+        unit = RetractionState(firmwareRetract=True, originalCommand="G10 S1")
+        position = Position()
+
+        returnCommands = unit.addRecoverCommands(position, None)
+        self.assertEqual(returnCommands, ["G11 S1"], "The returned list should be ['G11 S1']")
+        self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
+
+        returnCommands = unit.addRecoverCommands(position, ["ABC"])
+        self.assertEqual(
+            returnCommands, ["ABC", "G11 S1"], "The returned list should be ['ABC', 'G11 S1']"
         )
         self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
 
