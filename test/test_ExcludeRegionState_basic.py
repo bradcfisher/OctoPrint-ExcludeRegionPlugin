@@ -27,23 +27,33 @@ class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public
     ]
 
     def test_build_command_no_kwargs(self):
-        """Test the build_command utility method when passed a GCode command and no kwargs."""
+        """Test build_command when passed a GCode command and no kwargs."""
         cmd = build_command("G0")
         self.assertEqual(cmd, "G0", "The returned command should be 'G0'")
 
     def test_build_command_one_kwarg(self):
-        """Test the build_command utility method when passed a GCode command and one kwargs."""
+        """Test build_command when passed a GCode command and one kwargs."""
         cmd = build_command("G0", X=10)
         self.assertEqual(cmd, "G0 X10", "The returned command should be 'G0 X10'")
 
     def test_build_command_two_kwargs(self):
-        """Test the build_command utility method when passed a GCode command and two kwargs."""
+        """Test build_command when passed a GCode command and two kwargs."""
         cmd = build_command("G0", X=10, Y=20)
 
         self.assertRegexpMatches(cmd, "^G0 ", "The returned command should start with 'G0 '")
         # Due to kwargs, order of arguments is not guaranteed, and also is not required
         self.assertRegexpMatches(cmd, " X10( |$)", "The returned command should contain ' X10'")
         self.assertRegexpMatches(cmd, " Y20( |$)", "The returned command should contain ' Y20'")
+
+    def test_build_command_argValueNone(self):
+        """Test build_command when passed a GCode command and a kwarg set to None."""
+        cmd = build_command("G0", X=None)
+        self.assertEqual(cmd, "G0 X", "The returned command should be 'G0 X'")
+
+    def test_build_command_argValueEmptyString(self):
+        """Test build_command when passed a GCode command and a kwarg set to empty string."""
+        cmd = build_command("G0", X="")
+        self.assertEqual(cmd, "G0 X", "The returned command should be 'G0 X'")
 
     def _assert_default_resetState_properties(self, unit):
         """Test the value of properties that are always reset by the resetState method."""

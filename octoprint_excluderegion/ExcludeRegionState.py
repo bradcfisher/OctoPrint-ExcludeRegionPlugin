@@ -25,9 +25,8 @@ def build_command(gcode, **kwargs):
 
     **kwargs : dict
         The argument names and values to apply to the command (e.g. E=1.2, X=100, Y=200).
-        If the associated value is None, that entry will not be added to the command.  To
-        include an argument name with no value in the result, set the value for that argument
-        to an empty string.
+        If the associated value is None or an empty string, the argument will be added to the
+        command with no associated value.
 
     Returns
     -------
@@ -39,6 +38,8 @@ def build_command(gcode, **kwargs):
     for key, val in kwargs.iteritems():
         if (val is not None):
             vals.append(key + str(val))
+        else:
+            vals.append(key)
 
     if (len(vals) > 1):
         return " ".join(vals)
@@ -90,7 +91,9 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         Last position state before entering an excluded area.  Used for determining the best time
         to perform Z-axis moves when exiting an excluded region (e.g. before or after X/Y moves)
     pendingCommands : dict of Gcode commands and their arguments
-        Storage for pending commands to execute when exiting an excluded area.
+        Storage for pending commands to execute when exiting an excluded area.  Stored either as
+        (gcode -> {argName->value, ...}) for EXCLUDE_MERGE, or as (gcode -> commandString) for
+        EXCLUDE_EXCEPT_FIRST and EXCLUDE_EXCEPT_LAST.
     """
 
     def __init__(self, logger):
@@ -516,17 +519,12 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         ----------
         cmd : string
             The gcode the retraction is being recovered for.
-        returnCommands : List of Gcode commands | None
-            The Gcode command list to append any new command(s) to.  If None, a new list will be
-            created.
         isRecoveryCommand : boolean
             Whether the triggering command is a recovery (G11 or G0/G1 with no X/Y/Z component)
             [True], or an extruding move (G0/G1 with some X/Y/Z component) [False].
-
-        firmwareRecovery : boolean | None
-            Whether the triggering command is a firmware recovery (G11) [True], a non-firmware
-            recovery (G0/G1 with no X/Y/Z component) [False], or an extruding move (G0/G1 with
-            X/Y/Z component) [None].
+        returnCommands : List of Gcode commands | None
+            The Gcode command list to append any new command(s) to.  If None, a new list will be
+            created.
 
         Returns
         -------
@@ -545,7 +543,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             else:
                 # If not excluding, then execute any needed recovery commands and then the
                 # provided cmd
-                self._recoverRetraction(cmd, isRecoveryCommand, returnCommands)
+                returnCommands = self._recoverRetraction(cmd, isRecoveryCommand, returnCommands)
         elif (not self.excluding):
             if (isRecoveryCommand):
                 # This is a recovery that doesn't correspond to a previous retraction
@@ -568,6 +566,47 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
                 "recovery: excluding=%s, cmd=%s, returnCommands=%s",
                 self.excluding, cmd, returnCommands
             )
+
+        return returnCommands
+
+    def _processNonMove(self, cmd, deltaE, feedRate, returnCommands):
+        """
+        Process a command that doesn't affect the physical position of the X/Y/Z axes.
+
+        These commands will generally be either retractions (deltaE < 0) or recoveries (deltaE > 0)
+        which will be tracked to ensure the correct extruder position is maintained.
+
+        Parameters
+        ----------
+        deltaE : number
+            The offset to apply to the extruder position, in millimeters.
+        feedRate : number
+            The feed rate to use in millimeters/minute.
+        returnCommands : List of Gcode commands
+            The Gcode command list to append any new command(s) to.
+
+        Returns
+        -------
+        List of Gcode commands
+            The Gcode command(s) to execute, if any.  It is up to the caller to ensure these
+            commands are sent to the printer.
+        """
+        if (deltaE < 0):
+            # retraction, record the amount to potentially recover later
+            returnCommands = self.recordRetraction(
+                RetractionState(
+                    extrusionAmount=-deltaE,
+                    feedRate=feedRate,
+                    originalCommand=cmd
+                ),
+                returnCommands
+            )
+        elif (deltaE > 0):
+            # recovery
+            returnCommands = self.recoverRetractionIfNeeded(cmd, True, returnCommands)
+        elif (not self.excluding):
+            # something else (no move, no extrude, probably just setting feedrate)
+            returnCommands = [cmd]
 
         return returnCommands
 
@@ -609,10 +648,9 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             feedRate *= self.feedRateUnitMultiplier
 
         eAxis = self.position.E_AXIS
-        priorE = eAxis.current
         if (extruderPosition is not None):
             extruderPosition = eAxis.setLogicalPosition(extruderPosition)
-            deltaE = extruderPosition - priorE
+            deltaE = extruderPosition - eAxis.current
         else:
             deltaE = 0
 
@@ -638,27 +676,12 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
                 "processLinearMoves: " +
                 "cmd=%s, isMove=%s, extruderPosition=%s, priorE=%s, deltaE=%s, feedRate=%s, " +
                 "finalZ=%s, xyPairs=%s, excluding=%s, lastRetraction=%s, startPosition=%s",
-                cmd, isMove, extruderPosition, priorE, deltaE, feedRate,
+                cmd, isMove, extruderPosition, eAxis.current, deltaE, feedRate,
                 finalZ, xyPairs, self.excluding, self.lastRetraction, startPosition
             )
 
         if (not isMove):
-            if (deltaE < 0):
-                # retraction, record the amount to potentially recover later
-                returnCommands = self.recordRetraction(
-                    RetractionState(
-                        extrusionAmount=-deltaE,
-                        feedRate=feedRate,
-                        originalCommand=cmd
-                    ),
-                    returnCommands
-                )
-            elif (deltaE > 0):
-                # recovery
-                returnCommands = self.recoverRetractionIfNeeded(cmd, True, returnCommands)
-            elif (not self.excluding):
-                # something else (no move, no extrude, probably just setting feedrate)
-                returnCommands = [cmd]
+            returnCommands = self._processNonMove(cmd, deltaE, feedRate, returnCommands)
         elif (self.isAnyPointExcluded(*xyPairs)):
             if (not self.excluding):
                 returnCommands = self.enterExcludedRegion(cmd, returnCommands)
@@ -717,6 +740,33 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         return returnCommands
 
+    def _appendPendingCommands(self, returnCommands):
+        """
+        Append any pending commands after excluding, and any exit exclude region script.
+
+        Parameters
+        ----------
+        returnCommands : List of Gcode commands
+            The Gcode command list to append any new command(s) to.
+
+        Returns
+        -------
+        List of Gcode commands
+            The list passed in, with any necessary commands appended to it.
+        """
+        if (self.pendingCommands):
+            for gcode, cmdArgs in self.pendingCommands.iteritems():
+                if (isinstance(cmdArgs, dict)):
+                    returnCommands.append(build_command(gcode, **cmdArgs))
+                else:
+                    returnCommands.append(cmdArgs)
+            self.pendingCommands = {}
+
+        if (self.exitingExcludedRegionGcode is not None):
+            returnCommands.extend(self.exitingExcludedRegionGcode)
+
+        return returnCommands
+
     def exitExcludedRegion(self, cmd, returnCommands):
         """
         Determine the Gcode commands to execute when the tool exits an excluded region.
@@ -746,16 +796,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         if (returnCommands is None):
             returnCommands = []
 
-        if (self.exitingExcludedRegionGcode is not None):
-            returnCommands.extend(self.exitingExcludedRegionGcode)
-
-        if (self.pendingCommands):
-            for gcode, cmdArgs in self.pendingCommands.iteritems():
-                if (isinstance(cmdArgs, dict)):
-                    returnCommands.append(build_command(gcode, **cmdArgs))
-                else:
-                    returnCommands.append(cmdArgs)
-            self.pendingCommands = {}
+        returnCommands = self._appendPendingCommands(returnCommands)
 
         returnCommands.append(
             # Set logical extruder position
@@ -804,12 +845,17 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         Parameters
         ----------
         mode : string
-            The mode to use for processing the command.  One of EXCLUDE_MERGE, EXCLUDE_EXCEPT_FIRST,
-            or EXCLUDE_EXCEPT_LAST.
+            The mode to use for processing the command.  One of EXCLUDE_ALL, EXCLUDE_MERGE,
+            EXCLUDE_EXCEPT_FIRST, or EXCLUDE_EXCEPT_LAST.
         cmd : string
             The full Gcode command, including arguments.
         gcode : string
             Gcode command code only, e.g. G0 or M110
+
+        Returns
+        -------
+        IGNORE_GCODE_CMD
+            Returns IGNORE_GCODE_CMD to prevent processing.
         """
         self._logger.debug(
             "processExtendedGcode: gcode excluded by extended configuration: " +
@@ -835,6 +881,8 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         elif (mode == EXCLUDE_EXCEPT_LAST):
             # Capture the last instance of the command encountered
             self.pendingCommands[gcode] = cmd
+
+        return self.ignoreGcodeCommand()
 
     def processExtendedGcode(self, cmd, gcode, subcode=None):
         """
@@ -863,9 +911,8 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         if (gcode and self.excluding):
             entry = self.extendedExcludeGcodes.get(gcode)
-            if (entry is not None) and (entry.mode is not None):
-                self._processExtendedGcodeEntry(entry.mode, cmd, gcode)
-                return self.ignoreGcodeCommand()
+            if (entry is not None):
+                return self._processExtendedGcodeEntry(entry.mode, cmd, gcode)
 
         # Otherwise, let the command process normally
         return None

@@ -21,10 +21,11 @@ class RetractionState(CommonMixin):
     firmwareRetract : boolean
         This was a firmware retraction (G10)
     extrusionAmount : float | None
-        Amount of filament to extrude when recovering a previous retraction.  Will be None if
-        firmwareRetract is True.
+        Amount of filament to extrude when recovering a previous retraction, in millimeters.  Will
+        be None if firmwareRetract is True.
     feedRate : float
-        Feed rate for filament recovery.  Will be None if firmwareRetract is True.
+        Feed rate in millimeters/minute for filament recovery.  Will be None if firmwareRetract
+        is True.
     originalCommand : string
         Original retraction gcode
     """
@@ -40,10 +41,11 @@ class RetractionState(CommonMixin):
         firmwareRetract : boolean
             Whether this was a firmware retraction (G10) or not (G0/G1 with no XYZ move)
         extrusionAmount : float | None
-            Amount of filament to extrude when recovering a previous retraction.  Will be None if
-            firmwareRetract is True.
+            Amount of filament to extrude when recovering a previous retraction, in millimeters.
+            Will be None if firmwareRetract is True.
         feedRate : float
-            Feed rate for filament recovery.  Will be None if firmwareRetract is True.
+            Feed rate in millimeters/minute for filament recovery.  Will be None if firmwareRetract
+            is True.
         originalCommand : string
             The original Gcode command for the retraction
         """
