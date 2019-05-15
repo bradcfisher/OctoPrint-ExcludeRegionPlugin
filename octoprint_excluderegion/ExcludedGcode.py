@@ -4,9 +4,16 @@
 from __future__ import absolute_import
 from .CommonMixin import CommonMixin
 
+# Filter out the command when in an exclude region and do not send it to the printer.
 EXCLUDE_ALL = "exclude"
+
+# Execute the first instance of a command from an exclude region when exiting the region.
 EXCLUDE_EXCEPT_FIRST = "first"
+
+# Execute the last instance of a command from an exclude region when exiting the region.
 EXCLUDE_EXCEPT_LAST = "last"
+
+# Execute command with last encountered value of each argument when exiting an exclude region.
 EXCLUDE_MERGE = "merge"
 
 

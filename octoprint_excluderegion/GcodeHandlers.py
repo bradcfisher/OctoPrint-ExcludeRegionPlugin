@@ -15,13 +15,21 @@ import math
 from .RetractionState import RetractionState
 from .AtCommandAction import ENABLE_EXCLUSION, DISABLE_EXCLUSION
 
+# Pattern matching a typical floating point number value.
 REGEX_FLOAT_PATTERN = "[-+]?[0-9]*\\.?[0-9]+"
+
+# Pattern for parsing a Gcode parameter with a floating point value.
 REGEX_FLOAT_ARG = re.compile("^(?P<label>[A-Za-z])\\s*(?P<value>%s)" % REGEX_FLOAT_PATTERN)
+
+# Pattern for splitting a Gcode command into its constituent arguments.
 REGEX_SPLIT = re.compile("(?<!^)\\s*(?=[A-Za-z])")
 
+# A unit multiplier for converting logical units in inches to millimeters.
 INCH_TO_MM_FACTOR = 25.4
 
+# The length of individual generated arc segments.
 MM_PER_ARC_SEGMENT = 1
+
 TWO_PI = 2 * math.pi
 
 
@@ -339,13 +347,12 @@ class GcodeHandlers(object):
         self._logger.debug("_handle_G10: firmware retraction: cmd=%s", cmd)
         returnCommands = self.state.recordRetraction(
             RetractionState(
-                firmwareRetract=True,
-                originalCommand=cmd
-            ),
-            None
+                originalCommand=cmd,
+                firmwareRetract=True
+            )
         )
 
-        if (returnCommands is None):
+        if (not returnCommands):
             return self.state.ignoreGcodeCommand()
 
         return returnCommands
@@ -357,7 +364,7 @@ class GcodeHandlers(object):
         S parameter is for Repetier (0 = short unretract, 1 = long unretract)
         """
         returnCommands = self.state.recoverRetractionIfNeeded(cmd, True)
-        if (returnCommands is None):
+        if (not returnCommands):
             return self.state.ignoreGcodeCommand()
 
         return returnCommands

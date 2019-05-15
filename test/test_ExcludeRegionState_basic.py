@@ -11,8 +11,9 @@ from octoprint_excluderegion.ExcludeRegionState \
 from octoprint_excluderegion.Position import Position
 from octoprint_excluderegion.RectangularRegion import RectangularRegion
 from octoprint_excluderegion.CircularRegion import CircularRegion
+from octoprint_excluderegion.GcodeHandlers import INCH_TO_MM_FACTOR
 
-from .utils import TestCase
+from .utils import TestCase, create_position
 
 
 class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public-methods
@@ -550,9 +551,6 @@ class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public
             "(10,10) should NOT be excluded (exclusion disabled)"
         )
 
-    # TODO: Test that isPointExcluded is not affected by the logical coordinate units in effect
-    # TODO: Test that isAnyPointExcluded _IS_ affected by the logical coordinate units in effect
-
     def test_isAnyPointExcluded_noArguments(self):
         """Test the isAnyPointExcluded method when no arguments are provided."""
         mockLogger = mock.Mock()
@@ -684,6 +682,30 @@ class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public
             "(10,10) should NOT be excluded (exclusion disabled)"
         )
 
+    def test_isAnyPointExcluded_unitMultiplier(self):
+        """Test the isAnyPointExcluded method honors the unit multipler in effect."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        unit.position.setUnitMultiplier(INCH_TO_MM_FACTOR)
+        aRegion = RectangularRegion(
+            x1=INCH_TO_MM_FACTOR, y1=INCH_TO_MM_FACTOR,
+            x2=2 * INCH_TO_MM_FACTOR, y2=2 * INCH_TO_MM_FACTOR
+        )
+        unit.addRegion(aRegion)
+
+        self.assertTrue(
+            unit.isAnyPointExcluded(1, 1),
+            "(1 inch, 1 inch) should be excluded"
+        )
+        self.assertTrue(
+            unit.isAnyPointExcluded(2, 2),
+            "(2 inch, 2 inch) should be excluded"
+        )
+        self.assertFalse(
+            unit.isAnyPointExcluded(2.1, 2),
+            "(2.1 inch, 2 inch) should NOT be excluded"
+        )
+
     def test_isExclusionEnabled_enabled(self):
         """Test the isExclusionEnabled method when exclusion is enabled."""
         mockLogger = mock.Mock()
@@ -701,7 +723,7 @@ class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public
         self.assertFalse(unit.isExclusionEnabled(), "isExclusionEnabled should report False")
 
     @mock.patch.object(ExcludeRegionState, "exitExcludedRegion")
-    def test_disableExclusion_exclusionDisabled(self, mockExitExcludeRegion):
+    def test_disableExclusion_exclusionDisabled(self, mockExitExcludedRegion):
         """Test the disableExclusion method when exclusion is already disabled."""
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
@@ -714,12 +736,12 @@ class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public
             RegexMatcher("^Exclusion already disabled"),
             mock.ANY
         )
-        mockExitExcludeRegion.assert_not_called()
+        mockExitExcludedRegion.assert_not_called()
         self.assertFalse(unit.isExclusionEnabled(), "isExclusionEnabled should report False")
         self.assertEqual(returnedCommands, [], "An empty list of commands should be returned")
 
     @mock.patch.object(ExcludeRegionState, "exitExcludedRegion")
-    def test_disableExclusion_exclusionEnabled_notExcluding(self, mockExitExcludeRegion):
+    def test_disableExclusion_exclusionEnabled_notExcluding(self, mockExitExcludedRegion):
         """Test the disableExclusion method when exclusion is enabled and not excluding."""
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
@@ -727,13 +749,13 @@ class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public
         returnedCommands = unit.disableExclusion("Disable for test")
 
         self.assertFalse(unit.isExclusionEnabled(), "isExclusionEnabled should report False")
-        mockExitExcludeRegion.assert_not_called()
+        mockExitExcludedRegion.assert_not_called()
         self.assertEqual(returnedCommands, [], "An empty list of commands should be returned")
 
     @mock.patch.object(ExcludeRegionState, "exitExcludedRegion")
-    def test_disableExclusion_exclusionEnabled_excluding(self, mockExitExcludeRegion):
+    def test_disableExclusion_exclusionEnabled_excluding(self, mockExitExcludedRegion):
         """Test the disableExclusion method when exclusion is enabled and currently excluding."""
-        mockExitExcludeRegion.return_value = ["ABC"]
+        mockExitExcludedRegion.return_value = ["ABC"]
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
         unit.excluding = True
@@ -741,10 +763,7 @@ class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public
         returnedCommands = unit.disableExclusion("Redundant disable for test")
 
         self.assertFalse(unit.isExclusionEnabled(), "isExclusionEnabled should report False")
-        mockExitExcludeRegion.assert_called_with(
-            "Redundant disable for test",
-            []
-        )
+        mockExitExcludedRegion.assert_called_with("Redundant disable for test")
         self.assertEqual(
             returnedCommands, ["ABC"],
             "The commands returned by exitExcludeRegion should be returned"

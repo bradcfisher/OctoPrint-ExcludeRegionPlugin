@@ -90,7 +90,7 @@ def __plugin_load__():
     }
 
 
-class ExcludeRegionPlugin(
+class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
         octoprint.plugin.AssetPlugin,
         octoprint.plugin.TemplatePlugin,
         octoprint.plugin.SettingsPlugin,

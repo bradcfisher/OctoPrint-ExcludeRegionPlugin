@@ -10,6 +10,8 @@ import warnings
 
 from callee import Matcher
 
+from octoprint_excluderegion.Position import Position
+
 
 class FloatAlmostEqual(Matcher):
     """callee.Matcher subclass to test if a mock.call argument is almost equal to a value."""
@@ -161,6 +163,43 @@ class TestCase(unittest.TestCase):
                 msg = msg + sep + "Unexpected properties " + str(unexpected)
 
             raise AssertionError(msg)
+
+
+def create_position(x=None, y=None, z=None, extruderPosition=0, unitMultiplier=1):
+    """
+    Create a new Position object with a specified position and unit multiplier.
+
+    Parameters
+    ----------
+    x : float | None
+        The x coordinate value for the position, in native units.
+    y : float | None
+        The x coordinate value for the position, in native units.
+    z : float | None
+        The x coordinate value for the position, in native units.
+    extruderPosition : float
+        The extruder value for the position, in native units.
+    unitMultiplier : float
+        The unit multiplier to apply to the position.
+    """
+    position = Position()
+
+    if (x is not None):
+        position.X_AXIS.current = x
+
+    if (y is not None):
+        position.Y_AXIS.current = y
+
+    if (z is not None):
+        position.Z_AXIS.current = z
+
+    if (extruderPosition is not None):
+        position.E_AXIS.current = extruderPosition
+
+    if (unitMultiplier is not None):
+        position.setUnitMultiplier(unitMultiplier)
+
+    return position
 
 
 # ==========

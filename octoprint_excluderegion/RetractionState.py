@@ -15,51 +15,46 @@ class RetractionState(CommonMixin):
 
     Attributes
     ----------
-    recoverExcluded : boolean
-        Whether the recovery for this retraction was excluded or not.  If it was excluded, it will
-        need to be processed later.
+    originalCommand : string
+        Original retraction gcode
     firmwareRetract : boolean
         This was a firmware retraction (G10)
     extrusionAmount : float | None
         Amount of filament to extrude when recovering a previous retraction, in millimeters.  Will
-        be None if firmwareRetract is True.
-    feedRate : float
+        be None if firmwareRetract is True and a float otherwise.
+    feedRate : float | None
         Feed rate in millimeters/minute for filament recovery.  Will be None if firmwareRetract
-        is True.
-    originalCommand : string
-        Original retraction gcode
+        is True and a float otherwise.
+    recoverExcluded : boolean
+        Whether the recovery for this retraction was excluded or not (default False).  If it was
+        excluded, it will need to be processed later.
     """
 
     def __init__(
-            self, firmwareRetract=None, extrusionAmount=None, feedRate=None, originalCommand=None
+            self, originalCommand, firmwareRetract, extrusionAmount=None, feedRate=None
     ):
         """
         Initialize the instance properties.
 
         Parameters
         ----------
+        originalCommand : string
+            The original Gcode command for the retraction
         firmwareRetract : boolean
             Whether this was a firmware retraction (G10) or not (G0/G1 with no XYZ move)
         extrusionAmount : float | None
             Amount of filament to extrude when recovering a previous retraction, in millimeters.
-            Will be None if firmwareRetract is True.
-        feedRate : float
-            Feed rate in millimeters/minute for filament recovery.  Will be None if firmwareRetract
-            is True.
-        originalCommand : string
-            The original Gcode command for the retraction
+            Must be None if firmwareRetract is True, and a float otherwise.
+        feedRate : float | None
+            Feed rate in millimeters/minute for filament recovery.  Must be None if firmwareRetract
+            is True, and a float otherwise.
         """
-        nonFirmwareRetract = (extrusionAmount is not None) or (feedRate is not None)
-        if (firmwareRetract is not None):
-            if (nonFirmwareRetract):
+        if (firmwareRetract):
+            if (extrusionAmount is not None) or (feedRate is not None):
                 raise ValueError(
                     "You cannot provide a value for extrusionAmount or feedRate if " +
                     "firmwareRetract is specified"
                 )
-        elif (not nonFirmwareRetract):
-            raise ValueError(
-                "You must provide a value for firmwareRetract or extrusionAmount and feedRate"
-            )
         elif ((extrusionAmount is None) or (feedRate is None)):
             raise ValueError(
                 "You must provide values for both extrusionAmount and feedRate together"
@@ -71,7 +66,7 @@ class RetractionState(CommonMixin):
         self.feedRate = feedRate
         self.originalCommand = originalCommand
 
-    def addRetractCommands(self, position, returnCommands=None):
+    def generateRetractCommands(self, position):
         """
         Add the necessary commands to perform a retraction for this instance.
 
@@ -79,19 +74,15 @@ class RetractionState(CommonMixin):
         ----------
         position : Position
             The tool position state to apply the retraction to.
-        returnCommands : List of gcode commands
-            The Gcode command list to append the new command(s) to.  If None, a new list will be
-            created.
 
         Returns
         -------
         List of gcode commands
-            The Gcode command list provided in *returnCommands* or a newly created list.  The
-            retraction command(s) will be appended to the returned list.
+            A list containing the retraction command(s) to execute.
         """
-        return self._addCommands(1, position, returnCommands)
+        return self._addCommands(1, position)
 
-    def addRecoverCommands(self, position, returnCommands=None):
+    def generateRecoverCommands(self, position):
         """
         Add the necessary commands to perform a recovery for this instance.
 
@@ -99,19 +90,15 @@ class RetractionState(CommonMixin):
         ----------
         position : Position
             The tool position state to apply the retraction to.
-        returnCommands : List of gcode commands
-            The Gcode command list to append the new command(s) to.  If None, a new list will be
-            created.
 
         Returns
         -------
         List of gcode commands
-            The Gcode command list provided in *returnCommands* or a newly created list.  The
-            recovery command(s) will be appended to the returned list.
+            A list containing the recovery command(s) to execute.
         """
-        return self._addCommands(-1, position, returnCommands)
+        return self._addCommands(-1, position)
 
-    def _addCommands(self, direction, position, returnCommands):
+    def _addCommands(self, direction, position):
         """
         Add the necessary commands to perform a retraction or recovery for this instance.
 
@@ -122,18 +109,13 @@ class RetractionState(CommonMixin):
             amount.  Use 1 for retract, -1 for recover.
         position : Position
             The tool position state to apply the retraction to.
-        returnCommands : List of gcode commands
-            The Gcode command list to append the new command(s) to.  If None, a new list will be
-            created.
 
         Returns
         -------
         List of gcode commands
-            The Gcode command list provided in *returnCommands* or a newly created list.  The
-            new command(s) will be appended to the returned list.
+            A list containing the new command(s).
         """
-        if (returnCommands is None):
-            returnCommands = []
+        returnCommands = []
 
         if (self.firmwareRetract):
             cmd = "G11" if (direction == -1) else "G10"
@@ -154,6 +136,7 @@ class RetractionState(CommonMixin):
 
             eAxis.current -= amount
 
+            # Use "G1" over "G0", since an extrusion amount is being supplied
             returnCommands.append(
                 "G1 F{f} E{e}".format(
                     e=eAxis.nativeToLogical(),

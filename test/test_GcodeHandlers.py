@@ -513,18 +513,17 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
         unit.state.recordRetraction.assert_not_called()
         unit.state.ignoreGcodeCommand.assert_not_called()
 
-    def test_handle_G10_recordRetraction_returns_None(self):
-        """Test _handle_G10 when the call to recordRetraction returns None."""
+    def test_handle_G10_recordRetraction_returns_empty_list(self):
+        """Test _handle_G10 when the call to recordRetraction returns an empty list."""
         unit = self._createInstance()
 
-        unit.state.recordRetraction.return_value = None
+        unit.state.recordRetraction.return_value = []
         unit.state.ignoreGcodeCommand.return_value = "ignore"
 
         result = unit._handle_G10("G10", "G10", None)  # pylint: disable=protected-access
 
         unit.state.recordRetraction.assert_called_with(
-            RetractionState(firmwareRetract=True, originalCommand="G10"),
-            None
+            RetractionState(firmwareRetract=True, originalCommand="G10")
         )
         unit.state.ignoreGcodeCommand.assert_called()
 
@@ -540,18 +539,17 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit._handle_G10("G10", "G10", None)  # pylint: disable=protected-access
 
         unit.state.recordRetraction.assert_called_with(
-            RetractionState(firmwareRetract=True, originalCommand="G10"),
-            None
+            RetractionState(firmwareRetract=True, originalCommand="G10")
         )
         unit.state.ignoreGcodeCommand.assert_not_called()
 
         self.assertEqual(result, "proceed", "The result of recordRetraction should be returned.")
 
-    def test_handle_G11_recoverRetractionIfNeeded_returns_None(self):
-        """Test _handle_G11 when the call to recoverRetractionIfNeeded returns None."""
+    def test_handle_G11_recoverRetractionIfNeeded_returns_empty_list(self):
+        """Test _handle_G11 when the call to recoverRetractionIfNeeded returns an empty list."""
         unit = self._createInstance()
 
-        unit.state.recoverRetractionIfNeeded.return_value = None
+        unit.state.recoverRetractionIfNeeded.return_value = []
         unit.state.ignoreGcodeCommand.return_value = "ignore"
 
         result = unit._handle_G11("G11", "G11", None)  # pylint: disable=protected-access

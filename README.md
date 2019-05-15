@@ -160,6 +160,13 @@ that are not otherwise interpreted by the plugin (see the
 [Inspected Gcode Commands](#inspected-gcode-commands) section below for a list of Gcodes that will
 not be affected by these settings).
 
+If inside an excluded region, the commands defined here will be excluded from being processed when
+they are encountered.  Depending on how they are configured, the command execution may be deferred
+until after the tool leaves the exclusion region.  If commands are deferred for later processing
+using the First or Last options, they will be executed in the general order they are encountered.
+For the Merge option, the merged command will be executed at the position of the last instance
+encountered.
+
 You can add a new entry at the bottom by entering a Gcode (e.g. "G4", "M204", etc), selecting the
 exclusion mode to apply, providing an optional description for the entry, and clicking the "+"
 button.
@@ -171,7 +178,7 @@ Each entry has the following properties:
 
 **Gcode**
 
-A Gcode command to intercept when excluding (e.g. G4)
+A Gcode command to intercept when excluding (e.g. G4).
 
 **Mode**
 
@@ -198,15 +205,16 @@ One of the following processing modes
     > when exiting the excluded region.
 
   - _**Merge**_ - When a matching command is encountered in an excluded region, record the parameter
-    values, overwriting any matching parameters previously encountered for that command. When
-    exiting the excluded region, execute a single instance of the command with those collected
+    values, potentially overwriting any matching parameters previously encountered for that command.
+    When exiting the excluded region, execute a single instance of the command with those collected
     parameters.
 
     > M204 (Set default accelerations) and M205 (Advanced settings) are assigned this processing
     > type by default.  Slicers can output a large number of these commands, and sending each one
-    > to the printer while inside and excluded region causes extra delay due to that communication.
+    > to the printer while inside an excluded region causes extra delay due to that communication.
     > By accumulating the latest parameter value for each M204/M205 command instance encountered
-    > while excluding, and outputting a single merged command after exiting the excluded region.
+    > while excluding and outputting a single merged command after exiting the excluded region,
+    > an excluded region can be processed much more quickly.
 
 **Description**
 
