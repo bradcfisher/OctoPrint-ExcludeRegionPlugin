@@ -427,6 +427,19 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         with self.assertRaises(AssertionError):
             unit.enterExcludedRegion("G1 X1 Y2")
 
+    def test_exitExcludedRegion_excluding(self):
+        """Test exitExcludedRegion when already excluding."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+
+        unit.excluding = True
+        unit.numCommands = 10
+
+        result = unit.enterExcludedRegion("G1 X1 Y2")
+
+        self.assertEqual(unit.numCommands, 10, "The numCommands should not be updated.")
+        self.assertEqual(result, [], "An empty list should be returned.")
+
     def _test_enterExcludedRegion_common(self, enteringExcludedRegionGcode):
         """Test common functionality of enterExcludedRegion when exclusion is enabled."""
         mockLogger = mock.Mock()
@@ -557,6 +570,19 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             ],
             "The result should contain the expected pending commands plus the exit script"
         )
+
+    def test_exitExcludedRegion_notExcluding(self):
+        """Test exitExcludedRegion when not currently excluding."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+
+        unit.excluding = False
+
+        with mock.patch.object(unit, '_processPendingCommands') as mockProcessPendingCommands:
+            result = unit.exitExcludedRegion("G1 X1 Y2")
+
+            mockProcessPendingCommands.assert_not_called()
+            self.assertEqual(result, [], "An empty list should be returned.")
 
     def test_exitExcludedRegion_unitMultiplier(self):
         """Test exitExcludedRegion when a non-native unit multiplier is in effect."""

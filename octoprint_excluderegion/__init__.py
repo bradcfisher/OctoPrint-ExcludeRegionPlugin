@@ -84,6 +84,8 @@ def __plugin_load__():
     __plugin_hooks__ = {
         "octoprint.plugin.softwareupdate.check_config":
             __plugin_implementation__.getUpdateInformation,
+        "octoprint.comm.protocol.scripts":
+            (__plugin_implementation__.handleScriptHook, 0),
         "octoprint.comm.protocol.atcommand.queuing":
             __plugin_implementation__.handleAtCommandQueuing,
         "octoprint.comm.protocol.gcode.queuing": __plugin_implementation__.handleGcodeQueuing
@@ -696,8 +698,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
                 "phase=%s, cmd=%s, cmdType=%s, gcode=%s, subcode=%s, tags=%s, " +
                 "(isActivePrintJob=%s, isExclusionEnabled=%s, excluding=%s)",
                 phase, cmd, cmdType, gcode, subcode, tags,
-                self.isActivePrintJob, self.state.isExclusionEnabled(),
-                self.state.excluding
+                self.isActivePrintJob, self.state.isExclusionEnabled(), self.state.excluding
             )
 
         if (gcode and self.isActivePrintJob):
@@ -712,9 +713,26 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
             "phase=%s, command=%s, parameters=%s, tags=%s, " +
             "(isActivePrintJob=%s, isExclusionEnabled=%s, excluding=%s)",
             phase, cmd, parameters, tags,
-            self.isActivePrintJob, self.state.isExclusionEnabled(),
-            self.state.excluding
+            self.isActivePrintJob, self.state.isExclusionEnabled(), self.state.excluding
         )
 
         if (self.isActivePrintJob):
             self.gcodeHandlers.handleAtCommand(commInstance, cmd, parameters)
+
+    def handleScriptHook(  # pylint: disable=unused-argument
+            self, commInstance, scriptType, scriptName
+    ):
+        """Prepend exit region Gcode to the afterPrintDone script if currently excluding."""
+        self._logger.debug(
+            "handleScriptHook: scriptType=%s, scriptName=%s " +
+            "(isActivePrintJob=%s, isExclusionEnabled=%s, excluding=%s)",
+            scriptType, scriptName,
+            self.isActivePrintJob, self.state.isExclusionEnabled(), self.state.excluding
+        )
+
+        if (scriptType == "gcode") and (scriptName == "afterPrintDone"):
+            if (self.isActivePrintJob and self.state.excluding):
+                self._logger.info("Still excluding at end of print.  Sending exit region commands.")
+                return (self.state.exitExcludedRegion("Print done"), None)
+
+        return None

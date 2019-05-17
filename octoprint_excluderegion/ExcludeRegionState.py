@@ -722,6 +722,12 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         """
         assert self._exclusionEnabled, "Exclusion is disabled"
 
+        if (self.excluding):
+            self._logger.debug(
+                "Ignoring enterExcludedRegion call when already excluding: cmd=%s" % cmd
+            )
+            return []
+
         self.excluding = True
         self.excludeStartTime = time.time()
         self.numExcludedCommands = 0
@@ -780,6 +786,12 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             The Gcode command(s) to execute, or an empty list if none were generated.  It is up to
             the caller to ensure these commands are sent to the printer.
         """
+        if (not self.excluding):
+            self._logger.debug(
+                "Ignoring exitExcludedRegion call when not excluding: cmd=%s" % cmd
+            )
+            return []
+
         self.excluding = False
 
         # Moving back into printable region, process recovery command(s) if needed

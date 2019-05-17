@@ -49,8 +49,6 @@ class InitTests(TestCase):
         octoprint_excluderegion.__plugin_load__()
 
         checkConfigHookName = "octoprint.plugin.softwareupdate.check_config"
-        atCommandQueuingHookName = "octoprint.comm.protocol.atcommand.queuing"
-        gcodeQueuingHookName = "octoprint.comm.protocol.gcode.queuing"
 
         self.assertIsInstance(
             octoprint_excluderegion.__plugin_implementation__,
@@ -73,35 +71,9 @@ class InitTests(TestCase):
             []
         )
 
-        commInstance = mock.Mock()
-        phase = mock.Mock()
-        command = mock.Mock()
-        parameters = mock.Mock()
-        tags = mock.Mock()
-        self._assertHook(
-            octoprint_excluderegion.__plugin_hooks__,
-            atCommandQueuingHookName,
-            [commInstance, phase, command, parameters, tags],
-            pluginObject,
-            "handleAtCommandQueuing",
-            [commInstance, phase, command, parameters, tags]
-        )
-
-        commInstance = mock.Mock()
-        phase = mock.Mock()
-        command = mock.Mock()
-        commandType = mock.Mock()
-        gcode = mock.Mock()
-        subcode = mock.Mock()
-        tags = mock.Mock()
-        self._assertHook(
-            octoprint_excluderegion.__plugin_hooks__,
-            gcodeQueuingHookName,
-            [commInstance, phase, command, commandType, gcode, subcode, tags],
-            pluginObject,
-            "handleGcodeQueuing",
-            [commInstance, phase, command, commandType, gcode, subcode, tags]
-        )
+        self._assertAtCommandQueuingHook(pluginObject, octoprint_excluderegion.__plugin_hooks__)
+        self._assertGcodeQueuingHook(pluginObject, octoprint_excluderegion.__plugin_hooks__)
+        self._assertScriptHook(pluginObject, octoprint_excluderegion.__plugin_hooks__)
 
     def _assertHook(  # pylint: disable=too-many-arguments
             self, hooks, hookName, hookArgs, impl, implMethodName, methodArgs
@@ -146,3 +118,58 @@ class InitTests(TestCase):
             if (hookFunction != originalImplMethod):
                 hookFunction(*hookArgs)
                 mockImplMethod.assert_called_with(*methodArgs)
+
+    def _assertAtCommandQueuingHook(self, pluginObject, hooks):
+        """Ensure the @-command queuing hook is properly registered."""
+        atCommandQueuingHookName = "octoprint.comm.protocol.atcommand.queuing"
+
+        commInstance = mock.Mock()
+        phase = mock.Mock()
+        command = mock.Mock()
+        parameters = mock.Mock()
+        tags = mock.Mock()
+
+        self._assertHook(
+            hooks,
+            atCommandQueuingHookName,
+            [commInstance, phase, command, parameters, tags],
+            pluginObject,
+            "handleAtCommandQueuing",
+            [commInstance, phase, command, parameters, tags]
+        )
+
+    def _assertGcodeQueuingHook(self, pluginObject, hooks):
+        """Ensure the Gcode queuing hook is properly registered."""
+        gcodeQueuingHookName = "octoprint.comm.protocol.gcode.queuing"
+
+        commInstance = mock.Mock()
+        phase = mock.Mock()
+        command = mock.Mock()
+        commandType = mock.Mock()
+        gcode = mock.Mock()
+        subcode = mock.Mock()
+        tags = mock.Mock()
+        self._assertHook(
+            hooks,
+            gcodeQueuingHookName,
+            [commInstance, phase, command, commandType, gcode, subcode, tags],
+            pluginObject,
+            "handleGcodeQueuing",
+            [commInstance, phase, command, commandType, gcode, subcode, tags]
+        )
+
+    def _assertScriptHook(self, pluginObject, hooks):
+        """Ensure the script hook is properly registered."""
+        scriptHookName = "octoprint.comm.protocol.scripts"
+
+        commInstance = mock.Mock()
+        scriptType = mock.Mock()
+        scriptName = mock.Mock()
+        self._assertHook(
+            hooks,
+            scriptHookName,
+            [commInstance, scriptType, scriptName],
+            pluginObject,
+            "handleScriptHook",
+            [commInstance, scriptType, scriptName]
+        )

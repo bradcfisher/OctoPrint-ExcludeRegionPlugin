@@ -13,7 +13,7 @@ from octoprint_excluderegion.RectangularRegion import RectangularRegion
 from octoprint_excluderegion.CircularRegion import CircularRegion
 from octoprint_excluderegion.GcodeHandlers import INCH_TO_MM_FACTOR
 
-from .utils import TestCase, create_position
+from .utils import TestCase
 
 
 class ExcludeRegionStateBasicTests(TestCase):  # pylint: disable=too-many-public-methods
