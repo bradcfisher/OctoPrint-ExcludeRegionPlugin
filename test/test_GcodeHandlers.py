@@ -14,7 +14,7 @@ from .utils import TestCase
 class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
     """Unit tests for the GcodeHandlers class."""
 
-    expectedProperties = ["_logger", "state"]
+    expectedProperties = ["_logger", "state", "gcodeParser"]
 
     @staticmethod
     def _createInstance():

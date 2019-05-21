@@ -14,15 +14,8 @@ import math
 
 from .RetractionState import RetractionState
 from .AtCommandAction import ENABLE_EXCLUSION, DISABLE_EXCLUSION
+from .GcodeParser import GcodeParser
 
-# Pattern matching a typical floating point number value.
-REGEX_FLOAT_PATTERN = "[-+]?[0-9]*\\.?[0-9]+"
-
-# Pattern for parsing a Gcode parameter with a floating point value.
-REGEX_FLOAT_ARG = re.compile("^(?P<label>[A-Za-z])\\s*(?P<value>%s)" % REGEX_FLOAT_PATTERN)
-
-# Pattern for splitting a Gcode command into its constituent arguments.
-REGEX_SPLIT = re.compile("(?<!^)\\s*(?=[A-Za-z])")
 
 # A unit multiplier for converting logical units in inches to millimeters.
 INCH_TO_MM_FACTOR = 25.4
@@ -43,6 +36,8 @@ class GcodeHandlers(object):
         Logger for outputting log messages.
     state : ExcludeRegionState
         The plugin state object
+    gcodeParser : GcodeParser
+        GcodeParser instance for extracting data from a line of Gcode
     """
 
     def __init__(self, state, logger):
@@ -60,6 +55,7 @@ class GcodeHandlers(object):
         assert logger is not None, "A logger must be provided"
         self.state = state
         self._logger = logger
+        self.gcodeParser = GcodeParser()
 
     def planArc(self, endX, endY, i, j, clockwise):  # pylint: disable=too-many-locals,invalid-name
         """
@@ -240,12 +236,9 @@ class GcodeHandlers(object):
         x = None
         y = None
         z = None
-        cmdArgs = REGEX_SPLIT.split(cmd)
-        for index in range(1, len(cmdArgs)):
-            match = REGEX_FLOAT_ARG.search(cmdArgs[index])
-            if (match is not None):
-                label = match.group("label").upper()
-                value = float(match.group("value"))
+
+        for label, value in self.gcodeParser.parse(cmd).parameterItems():
+            if (value is not None):
                 if (label == "E"):
                     extruderPosition = value
                 elif (label == "F"):
@@ -288,12 +281,9 @@ class GcodeHandlers(object):
         radius = None
         i = 0
         j = 0
-        cmdArgs = REGEX_SPLIT.split(cmd)
-        for index in range(1, len(cmdArgs)):
-            match = REGEX_FLOAT_ARG.search(cmdArgs[index])
-            if (match is not None):
-                label = match.group("label").upper()
-                value = float(match.group("value"))
+
+        for label, value in self.gcodeParser.parse(cmd).parameterItems():
+            if (value is not None):
                 if (label == "X"):
                     x = value
                 elif (label == "Y"):
@@ -338,10 +328,8 @@ class GcodeHandlers(object):
         Existence of a P or L parameter indicates RepRap tool offset/temperature or workspace
         coordinates and is simply passed through unfiltered
         """
-        cmdArgs = REGEX_SPLIT.split(cmd)
-        for index in range(1, len(cmdArgs)):
-            argType = cmdArgs[index][0].upper()
-            if (argType in ("P", "L")):
+        for label, value in self.gcodeParser.parse(cmd).parameterItems():
+            if (label in ("P", "L")):
                 return None
 
         self._logger.debug("_handle_G10: firmware retraction: cmd=%s", cmd)
@@ -385,17 +373,20 @@ class GcodeHandlers(object):
         Set the current position to 0 for each axis in the command
         """
         position = self.state.position
-        cmdArgs = REGEX_SPLIT.split(cmd)
         homeX = False
         homeY = False
         homeZ = False
-        for arg in cmdArgs:
-            arg = arg.upper()
-            if (arg.startswith("X")):
+
+        # TODO: Support the "O" parameter (don't home if position known?)
+        #    If we think a position is known, then don't change position?
+        #    It may be safest to send a position request after the home and wait for the printer to respond with the new position.
+
+        for label, value in self.gcodeParser.parse(cmd).parameterItems():
+            if (label == "X"):
                 homeX = True
-            elif (arg.startswith("Y")):
+            elif (label == "Y"):
                 homeY = True
-            elif (arg.startswith("Z")):
+            elif (label == "Z"):
                 homeZ = True
 
         if (not (homeX or homeY or homeZ)):
@@ -429,12 +420,9 @@ class GcodeHandlers(object):
         by defining a coordinate offset.
         """
         position = self.state.position
-        cmdArgs = REGEX_SPLIT.split(cmd)
-        for index in range(1, len(cmdArgs)):
-            match = REGEX_FLOAT_ARG.search(cmdArgs[index])
-            if (match is not None):
-                label = match.group("label").upper()
-                value = float(match.group("value"))
+
+        for label, value in self.gcodeParser.parse(cmd).parameterItems():
+            if (value is not None):
                 if (label == "E"):
                     # Note: 1.0 Marlin and earlier stored an offset for E instead of directly
                     #   updating the position.
@@ -454,12 +442,9 @@ class GcodeHandlers(object):
         M206 [P<offset>] [T<offset>] [X<offset>] [Y<offset>] [Z<offset>]
         """
         position = self.state.position
-        cmdArgs = REGEX_SPLIT.split(cmd)
-        for index in range(1, len(cmdArgs)):
-            match = REGEX_FLOAT_ARG.search(cmdArgs[index])
-            if (match is not None):
-                label = match.group("label").upper()
-                value = float(match.group("value"))
+
+        for label, value in self.gcodeParser.parse(cmd).parameterItems():
+            if (value is not None):
                 if (label == "X"):
                     position.X_AXIS.setHomeOffset(value)
                 elif (label == "Y"):

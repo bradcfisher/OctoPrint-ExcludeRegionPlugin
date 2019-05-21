@@ -60,19 +60,6 @@ LOG_MODE_OCTOPRINT = "octoprint"
 LOG_MODE_DEDICATED = "dedicated"
 LOG_MODE_BOTH = "both"
 
-# Regex for splitting a string containing multiple lines of Gcode
-# Per RS274/NGC, line separator can be CR, LF or CRLF
-REGEX_SPLIT_GCODE_LINES = re.compile("\\r\\n|\\n|\\r")
-
-# Regex for removing leading and trailing whitespace and comments starting with ";"
-# Example: "  M117 I like traffic lights; but not when they are red" -> "M117 I like traffic lights"
-REGEX_TRIM_GCODE = re.compile("^\\s*([^;]*?)\\s*(?:;.*)?$")
-
-# The following would permit semicolons in double-quote strings, as mentioned in the RepRap GCode
-# documentation, but that doesn't seem to be supported by OctoPrint or Marlin.
-#   REGEX_TRIM_GCODE = re.compile("^\\s*((?:[^;\"]*?|\"(?:[^\"]|\"\")*\")*)\\s*(?:;.*)?$")
-# It also appears that neither Octoprint nor Marlin support comments enclosed in parenthesis
-
 
 # pylint: disable=global-statement
 def __plugin_load__():
@@ -124,6 +111,8 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
 
         The actual initialization is performed by the initialize method.
         """
+        super(ExcludeRegionPlugin, self).__init__()
+
         self._activePrintJob = None
         self._loggingMode = None
         self._pluginLoggingHandler = None
@@ -131,7 +120,6 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
         self.mayShrinkRegionsWhilePrinting = None
         self.state = None
         self.gcodeHandlers = None
-        super(ExcludeRegionPlugin, self).__init__()
 
     def initialize(self):
         """
@@ -599,8 +587,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
             )
         )
 
-    @staticmethod
-    def _splitGcodeScript(gcodeString):
+    def _splitGcodeScript(self, gcodeString):
         """
         Split multiple lines of Gcode at line breaks and remove comments and blank lines.
 
@@ -617,13 +604,16 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
         if (gcodeString is None):
             return None
 
-        tmp = REGEX_SPLIT_GCODE_LINES.split(gcodeString)
-
         gcodeCommands = []
-        for gcode in tmp:
-            gcode = REGEX_TRIM_GCODE.match(gcode).group(1)
-            if (gcode != ""):
-                gcodeCommands.append(gcode)
+
+        for gcode in self.gcodeHandlers.gcodeParser.parseLines(gcodeString):
+            line = gcode.stringify(
+                includeLineNumber=False,
+                includeComment=False,
+                includeEol=False
+            )
+            if (line is not None) and len(line):
+                gcodeCommands.append(line)
 
         if (not gcodeCommands):
             gcodeCommands = None

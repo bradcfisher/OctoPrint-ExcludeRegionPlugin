@@ -71,7 +71,7 @@ class ExcludeRegionStateProcessExtendedGcodeTests(
         )
 
         self.assertEqual(
-            unit.pendingCommands, OrderedDict([("G1", {"X": "1", "Y": "2"})]),
+            unit.pendingCommands, OrderedDict([("G1", {"X": 1, "Y": 2})]),
             "pendingCommands should be updated with the command arguments."
         )
         self.assertEqual(
@@ -83,7 +83,7 @@ class ExcludeRegionStateProcessExtendedGcodeTests(
         """Test processExtendedGcodeEntry / EXCLUDE_MERGE if pending args and no command args."""
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
-        unit.pendingCommands = OrderedDict([("G1", {"X": "10"}), ("M117", "M117 Test")])
+        unit.pendingCommands = OrderedDict([("G1", {"X": 10}), ("M117", "M117 Test")])
 
         result = unit._processExtendedGcodeEntry(  # pylint: disable=protected-access
             EXCLUDE_MERGE,
@@ -95,7 +95,7 @@ class ExcludeRegionStateProcessExtendedGcodeTests(
             unit.pendingCommands,
             OrderedDict([
                 ("M117", "M117 Test"),
-                ("G1", {"X": "10"})
+                ("G1", {"X": 10})
             ]),
             "pendingCommands should be updated with new argument values."
         )
@@ -109,7 +109,7 @@ class ExcludeRegionStateProcessExtendedGcodeTests(
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
         unit.pendingCommands = OrderedDict([
-            ("G1", {"X": "10", "Z": "20"}),
+            ("G1", {"X": 10, "Z": 20}),
             ("M117", "M117 Test")
         ])
 
@@ -124,7 +124,7 @@ class ExcludeRegionStateProcessExtendedGcodeTests(
             unit.pendingCommands,
             OrderedDict([
                 ("M117", "M117 Test"),
-                ("G1", {"X": "1", "Y": "2", "Z": "20"})
+                ("G1", {"X": 1, "Y": 2, "Z": 20})
             ]),
             "pendingCommands should be updated with new argument values."
         )

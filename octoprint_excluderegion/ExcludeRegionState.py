@@ -8,44 +8,11 @@ import time
 from collections import OrderedDict, Mapping
 
 from .ExcludedGcode import EXCLUDE_EXCEPT_FIRST, EXCLUDE_EXCEPT_LAST, EXCLUDE_MERGE
-from .GcodeHandlers import REGEX_SPLIT
 from .Position import Position
 from .RetractionState import RetractionState
+from .GcodeParser import GcodeParser
 
 IGNORE_GCODE_CMD = (None,)
-
-
-def build_command(gcode, **kwargs):
-    """
-    Construct a Gcode command string with the specified named arguments.
-
-    Parameters
-    ----------
-    gcode : string
-        The Gcode without any arguments (e.g. "G0")
-
-    **kwargs : dict
-        The argument names and values to apply to the command (e.g. E=1.2, X=100, Y=200).
-        If the associated value is None or an empty string, the argument will be added to the
-        command with no associated value.
-
-    Returns
-    -------
-    string
-        The final Gcode command as a string
-    """
-    vals = [gcode]
-
-    for key, val in kwargs.iteritems():
-        if (val is not None):
-            vals.append(key + str(val))
-        else:
-            vals.append(key)
-
-    if (len(vals) > 1):
-        return " ".join(vals)
-
-    return gcode
 
 
 class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attributes
@@ -91,6 +58,8 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
     lastPosition : Position | None
         Last position state before entering an excluded area.  Used for determining the best time
         to perform Z-axis moves when exiting an excluded region (e.g. before or after X/Y moves)
+    gcodeParser : GcodeParser
+        GcodeParser instance for extracting data from a line of Gcode
     pendingCommands : ordereddict of Gcode commands and their arguments
         Storage for pending commands to execute when exiting an excluded area.  Stored either as
         (gcode -> {argName->value, ...}) for EXCLUDE_MERGE, or as (gcode -> commandString) for
@@ -116,6 +85,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         self.exitingExcludedRegionGcode = None
         self.extendedExcludeGcodes = {}
         self.atCommandActions = {}
+        self.gcodeParser = GcodeParser()
 
         self.resetState(True)
 
@@ -656,20 +626,18 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
                     break
 
         if (feedRate is not None):
-            # Convert feedRate to millimeters/minute
-            feedRate *= self.feedRateUnitMultiplier
-
             # Marlin 1.1.9 maintains a single "current" feedrate ("feedrate_mm_s" global var) which
             # is updated by the gcode_get_destination() function in Marlin_main.cpp.
             # (G0/G1/G2/G3/G5)
-            self.feedRate = feedRate
+            # Convert incoming feedRate to millimeters/minute
+            self.feedRate = feedRate * self.feedRateUnitMultiplier
 
         if (isDebug):
             self._logger.debug(
                 "processLinearMoves: " +
                 "cmd=%s, isMove=%s, extruderPosition=%s, priorE=%s, deltaE=%s, feedRate=%s, " +
                 "finalZ=%s, xyPairs=%s, excluding=%s, lastRetraction=%s, startPosition=%s",
-                cmd, isMove, extruderPosition, priorE, deltaE, feedRate,
+                cmd, isMove, extruderPosition, priorE, deltaE, self.feedRate,
                 finalZ, xyPairs, self.excluding, self.lastRetraction, startPosition
             )
 
@@ -756,7 +724,9 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         if (self.pendingCommands):
             for gcode, cmdArgs in self.pendingCommands.iteritems():
                 if (isinstance(cmdArgs, Mapping)):
-                    returnCommands.append(build_command(gcode, **cmdArgs))
+                    returnCommands.append(
+                        self.gcodeParser.buildCommand(gcode, **cmdArgs)
+                    )
                 else:
                     returnCommands.append(cmdArgs)
             self.pendingCommands.clear()
@@ -870,10 +840,8 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             # Append the entry at the end
             self.pendingCommands[gcode] = pendingArgs
 
-            cmdArgs = REGEX_SPLIT.split(cmd)
-            for index in range(1, len(cmdArgs)):
-                arg = cmdArgs[index]
-                pendingArgs[arg[0].upper()] = arg[1:]
+            for label, value in self.gcodeParser.parse(cmd).parameterItems():
+                pendingArgs[label] = value
         elif (mode == EXCLUDE_EXCEPT_FIRST):
             # Capture the first instance of the command encountered
             if (not (gcode in self.pendingCommands)):
