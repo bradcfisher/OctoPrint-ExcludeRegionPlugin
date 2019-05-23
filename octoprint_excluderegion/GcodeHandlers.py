@@ -9,7 +9,6 @@
 
 from __future__ import absolute_import
 
-import re
 import math
 
 from .RetractionState import RetractionState
@@ -328,7 +327,7 @@ class GcodeHandlers(object):
         Existence of a P or L parameter indicates RepRap tool offset/temperature or workspace
         coordinates and is simply passed through unfiltered
         """
-        for label, value in self.gcodeParser.parse(cmd).parameterItems():
+        for label, _ in self.gcodeParser.parse(cmd).parameterItems():
             if (label in ("P", "L")):
                 return None
 
@@ -379,9 +378,10 @@ class GcodeHandlers(object):
 
         # TODO: Support the "O" parameter (don't home if position known?)
         #    If we think a position is known, then don't change position?
-        #    It may be safest to send a position request after the home and wait for the printer to respond with the new position.
+        #    It may be safest to send a position request after the home and wait for the printer
+        #    to respond with the new position.
 
-        for label, value in self.gcodeParser.parse(cmd).parameterItems():
+        for label, _ in self.gcodeParser.parse(cmd).parameterItems():
             if (label == "X"):
                 homeX = True
             elif (label == "Y"):

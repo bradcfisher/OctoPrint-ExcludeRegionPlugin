@@ -612,7 +612,8 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
                 includeComment=False,
                 includeEol=False
             )
-            if (line is not None) and len(line):
+            # "0" is falsy, but should be added as a line below, hence the pylint exception
+            if (line is not None) and len(line):  # pylint: disable=len-as-condition
                 gcodeCommands.append(line)
 
         if (not gcodeCommands):

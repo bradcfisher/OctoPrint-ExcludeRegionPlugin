@@ -6,19 +6,51 @@ from collections import OrderedDict
 
 from .CommonMixin import CommonMixin
 
-# TODO: Permit spaces between N,G,M,T,* and their respective values?
+# TODO: parsing options?
+#   - specify whitespace chars
+#   - disable subcode support
+#   - disable case-insensitivity
+#   - disable '\' escapes
+# TODO: specify special rules per gcode?
+#   e.g. Marlin doesn't interpret/split parameter string for M23, M28, M30, M117, (kinda M118),
+#        and M928.  It always just assigns the whole thing to string_arg
 
-PAT_WHITESPACE = r"[ \t]*"
-PAT_LINE_NUMBER = r"(?:[Nn]([-+]?\d+))?"
+# Marlin "bugs"?
+#   - If you include an asterisk on a line, Marlin only tries to validate any subsequent checksum
+#     if there's also a line number (N) (e.g. "G0 X1*323" will silently ignore the bad checksum)
+#   - Asterisks can technically be escaped with a backslash when read from serial, but the escape
+#     char is only applied during parsing the serial into a line buffer and is no longer available
+#     when interpreting the checksum, etc. (e.g. "M117 2 \* 2 = 4" will end up being "M117 2 " when
+#     it's executed)
+#   - The checksum used will be extracted from the _last_ asterisk in the line
+#     (Marlin_main.cpp/get_serial_commands[1081]/char *apos = strrchr(command, '*');)
+#     (e.g. "N5 G0 X1 *12 *83" will validate "N5 G0 X1 *12 " against a checksum of 83)
+#   - When reading from an SD card, backslashes are not supported, since that's done via a
+#     different implementation
+#   - When reading from an SD card, a colon will terminate the current line.  That behavior was
+#     removed from the serial read routine (I believe when the escaping mechanism was added).
+#   - Everything in the line will be truncated following the _first_ asterisk in the line
+#     (parse.cpp/GcodeParser::parse[110]/char *starpos = strchr(p, '*'); - not sure why it was even
+#     copied into the buffer in the first place... (e.g. "G0 X1 *12 *83" will be truncated to
+#     "G0 X1" before being executed)
+
+PAT_WHITESPACE = r"[ ]*"
+PAT_LINE_NUMBER = r"(?:[Nn](\d+))?"
 
 PAT_CODE = (
     r"(?:" +
-    r"([GgMm])(\d+)(?:\.(\d+))?" +
+    r"([GgMm])" + PAT_WHITESPACE + r"(\d+)(?:\.(\d+))?" +
     r"|" +
-    r"([Tt])(\d+)" +
+    r"([Tt])" + PAT_WHITESPACE + r"(\d+)" +
     r")"
 )
-PAT_PARAMETERS = r"((?:\\\\|\\;|[^;*])+?)?"
+
+# '\\', '\;' or anything but a ';'
+# As of 1.1.9, escapes are only honored by Marlin when reading from the serial, and really only
+# affect comments, since they are dropped before other portions of the command are parsed (such as
+# checksum, etc)
+PAT_PARAMETERS_CHAR = r"(?:\\\\|\\;|[^;*])"
+
 PAT_CHECKSUM = r"(?:\*(\d+))?"
 PAT_COMMENT = r"(;[^\r\n]*)?"
 PAT_EOL = r"(\r\n|\r|\n|\Z)"
@@ -29,7 +61,7 @@ PAT_GCODE_LINE = (
     r"(?:" +
     PAT_LINE_NUMBER +
     PAT_WHITESPACE + PAT_CODE +
-    PAT_WHITESPACE + PAT_PARAMETERS +
+    PAT_WHITESPACE + r"(" + PAT_PARAMETERS_CHAR + "+?)?" +
     PAT_WHITESPACE +
     PAT_CHECKSUM +
     r")?" +
@@ -49,7 +81,7 @@ print "PAT_GCODE_LINE=" + PAT_GCODE_LINE
 #   3 - G or M command sub code, if present
 #   4 - T command type, if present
 #   5 - T command code, if present
-REGEX_GCODE_CODE = re.compile(r"^" + PAT_WHITESPACE + PAT_CODE)
+REGEX_GCODE_CODE = re.compile(r"\A" + PAT_WHITESPACE + PAT_CODE + PAT_WHITESPACE + r"\Z")
 
 # Regex for parsing a line of Gcode
 # Capture groups:
@@ -67,6 +99,11 @@ REGEX_GCODE_CODE = re.compile(r"^" + PAT_WHITESPACE + PAT_CODE)
 #  12 - Comment, if present
 #  13 - EOL (may be empty string)
 REGEX_GCODE_LINE = re.compile(PAT_GCODE_LINE)
+
+# Regex for validating a string intended for use as gcode command parameters
+REGEX_PARAMETERS = re.compile(
+    r"\A" + PAT_WHITESPACE + r"(" + PAT_PARAMETERS_CHAR + "*?)" + PAT_WHITESPACE + r"\Z"
+)
 
 # Pattern matching a typical floating point number value.
 PAT_SIGNED_FLOAT = r"[-+]?[0-9]*\.?[0-9]+"
@@ -226,7 +263,7 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
 
         self._gcodeMatch(match, 4)
 
-        self.parameters = match.group(9)
+        self._updateParameters(match.group(9))
 
         self._checksum = match.group(10)
         if (self._checksum is not None):
@@ -357,7 +394,7 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
         """
         match = REGEX_GCODE_CODE.match(value)
         if (not match):
-            raise ValueError("Unable to parse gcode value: " + value)
+            raise ValueError("Unable to parse gcode value: " + repr(value))
 
         self._gcodeMatch(match, 1)
 
@@ -371,12 +408,25 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
         """Command parameters as a single string."""
         return self._parameters
 
-    @parameters.setter
-    def parameters(self, value):
-        """Assign new command parameters as a single string."""
+    def _updateParameters(self, value):
+        """Assign new command parameters as a single string, without validation."""
         self._parameters = value
         self._parameterDict = None
         self._commandString = None
+
+    @parameters.setter
+    def parameters(self, value):
+        """
+        Assign new command parameters as a single string, with validation.
+
+        Validation consists of ensuring the assigned string does not contain any content that could
+        be interpreted as a checksum value or comment.
+        """
+        match = REGEX_PARAMETERS.match(value)
+        if (match):
+            self._updateParameters(match.group(1))
+        else:
+            raise ValueError("Unable to validate parameters value: " + repr(value))
 
     def parameterItems(self, source=None):
         """
@@ -417,12 +467,12 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
                 if (value is not None):
                     value = float(value)
                 elif (stringArgOffset is None):
-                    stringArgOffset = match.start()
+                    stringArgOffset = match.start(1)
                     regex = REGEX_PARAMETER
 
                 yield (name, value)
             elif (stringArgOffset is None):
-                stringArgOffset = match.start()
+                stringArgOffset = match.start(3)
                 regex = REGEX_PARAMETER
 
             offset = match.end()
@@ -479,9 +529,9 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
                 vals.append(key)
 
         if (vals):
-            self.parameters = " ".join(vals)
+            self._updateParameters(" ".join(vals))
         else:
-            self.parameters = None
+            self._updateParameters(None)
 
     @staticmethod
     def computeChecksum(value):

@@ -212,7 +212,7 @@ class GcodeParserTests(TestCase):  # pylint: disable=too-many-public-methods
 
     def test_parse_only_whitespace(self):
         """Test parsing a line containing only whitespace."""
-        self._test_parse_line(source="   \t   ", leadingWhitespace="   \t   ")
+        self._test_parse_line(source="      ", leadingWhitespace="      ")
 
     def test_parse_only_comment(self):
         """Test parsing a line containing only a comment."""
@@ -224,9 +224,9 @@ class GcodeParserTests(TestCase):  # pylint: disable=too-many-public-methods
     def test_parse_leading_whitespace_and_comment(self):
         """Test parsing a line containing whitespace and a comment."""
         self._test_parse_line(
-            source="  \t  ; This is a comment ",
+            source="    ; This is a comment ",
             comment="; This is a comment ",
-            leadingWhitespace="  \t  "
+            leadingWhitespace="    "
         )
 
     def test_parse_eol_following_comment(self):
@@ -755,9 +755,258 @@ class GcodeParserTests(TestCase):  # pylint: disable=too-many-public-methods
 # TODO: test multiple sequential calls of parse - indirectly tested by parseLines
 # TODO: test parseLines
 
-# TODO: test lineNumber setter
-# TODO: test gcode setter
-# TODO: test parameters setter
+    def test_lineNumber_setter(self):
+        """Test the lineNumber setter."""
+        unit = GcodeParser()
+        unit.parse("G0")
+        self.assertIsNone(unit.lineNumber, "The lineNumber should be None.")
+        self.assertEqual(unit.commandString, "G0", "The commandString should be 'G0'.")
+
+        unit.lineNumber = 1234
+
+        self.assertEqual(unit.lineNumber, 1234, "The lineNumber should be 1234.")
+        self.assertEqual(unit.gcode, "G0", "The gcode should be 'G0'.")
+        self.assertEqual(unit.commandString, "N1234 G0", "The commandString should be 'N1234 G0'.")
+
+    def test_gcode_setter_noSubCode(self):
+        """Test the gcode setter when no subCode is supplied."""
+        unit = GcodeParser()
+
+        unit.gcode = "G0"
+
+        self.assertEqual(unit.type, "G", "The type should be 'G'.")
+        self.assertEqual(unit.code, 0, "The code should be 0.")
+        self.assertIsNone(unit.subCode, "The subCode should be None.")
+        self.assertEqual(unit.gcode, "G0", "The gcode should be 'G0'.")
+        self.assertEqual(unit.commandString, "G0", "The commandString should be 'G0'.")
+
+        unit.gcode = "M17"
+
+        self.assertEqual(unit.type, "M", "The type should be 'M'.")
+        self.assertEqual(unit.code, 17, "The code should be 17.")
+        self.assertIsNone(unit.subCode, "The subCode should be None.")
+        self.assertEqual(unit.gcode, "M17", "The gcode should be 'M17'.")
+        self.assertEqual(unit.commandString, "M17", "The commandString should be 'M17'.")
+
+        unit.gcode = "T2"
+
+        self.assertEqual(unit.type, "T", "The type should be 'T'.")
+        self.assertEqual(unit.code, 2, "The code should be 2.")
+        self.assertEqual(unit.gcode, "T2", "The gcode should be 'T2'.")
+        self.assertIsNone(unit.subCode, "The subCode should be None.")
+        self.assertEqual(unit.commandString, "T2", "The commandString should be 'T2'.")
+
+    def test_gcode_setter_subCode(self):
+        """Test the gcode setter when supplied with a subcode."""
+        unit = GcodeParser()
+
+        unit.gcode = "G1.2"
+
+        self.assertEqual(unit.type, "G", "The type should be 'G'.")
+        self.assertEqual(unit.code, 1, "The code should be 1.")
+        self.assertEqual(unit.subCode, 2, "The subCode should be 2.")
+        self.assertEqual(unit.gcode, "G1", "The gcode should be 'G1'.")
+        self.assertEqual(unit.commandString, "G1.2", "The commandString should be 'G1.2'.")
+
+        unit.gcode = "M17.1"
+
+        self.assertEqual(unit.type, "M", "The type should be 'M'.")
+        self.assertEqual(unit.code, 17, "The code should be 17.")
+        self.assertEqual(unit.subCode, 1, "The subCode should be 1.")
+        self.assertEqual(unit.gcode, "M17", "The gcode should be 'M17'.")
+        self.assertEqual(unit.commandString, "M17.1", "The commandString should be 'M17.1'.")
+
+        # T codes don't support subCodes
+        with self.assertRaises(ValueError):
+            unit.gcode = "T2.3"
+
+        # No side-effects from exception
+        self.assertEqual(unit.type, "M", "The type should be 'M'.")
+        self.assertEqual(unit.code, 17, "The code should be 17.")
+        self.assertEqual(unit.subCode, 1, "The subCode should be 1.")
+
+    def test_gcode_setter_whitespace(self):
+        """Test the gcode setter when the supplied value has leading/trailing whitespace."""
+        unit = GcodeParser()
+
+        unit.gcode = "  G  1  "
+
+        self.assertEqual(unit.type, "G", "The type should be 'G'.")
+        self.assertEqual(unit.code, 1, "The code should be 1.")
+        self.assertIsNone(unit.subCode, "The subCode should be None.")
+
+        unit.gcode = "  M  17.1  "
+
+        self.assertEqual(unit.type, "M", "The type should be 'M'.")
+        self.assertEqual(unit.code, 17, "The code should be 17.")
+        self.assertEqual(unit.subCode, 1, "The subCode should be 1.")
+
+        unit.gcode = "  T  2  "
+
+        self.assertEqual(unit.type, "T", "The type should be 'T'.")
+        self.assertEqual(unit.code, 2, "The code should be 2.")
+        self.assertEqual(unit.gcode, "T2", "The gcode should be 'T2'.")
+
+    def test_parameters_setter_valid(self):
+        """Test the parameters setter when valid parameters are provided."""
+        unit = GcodeParser()
+        unit.parse("G1")
+        self.assertEqual(unit.commandString, "G1", "The commandString should be 'G1'.")
+
+        unit.parameters = "X10 Y3.2 Foo"
+
+        self.assertEqual(
+            unit.parameters, "X10 Y3.2 Foo",
+            "The parameters should be the expected value."
+        )
+        self.assertEqual(
+            unit.commandString, "G1 X10 Y3.2 Foo",
+            "The commandString should be the expected value."
+        )
+        self.assertEqual(
+            unit.parameterDict,
+            OrderedDict([
+                ("X", 10),
+                ("Y", 3.2),
+                ("F", None),
+                ("O", None),
+                ("", "Foo")
+            ]),
+            "The parameterDict should be the expected value."
+        )
+
+    def test_parameters_setter_valid_escapes(self):
+        """Test the parameters setter when valid parameters with escaped chars are provided."""
+        unit = GcodeParser()
+        unit.parse("G1")
+        self.assertEqual(unit.commandString, "G1", "The commandString should be 'G1'.")
+
+        unit.parameters = r"X10 \\ \;Not a comment"
+
+        self.assertEqual(
+            unit.parameters, r"X10 \\ \;Not a comment",
+            "The parameters should be the expected value."
+        )
+        self.assertEqual(
+            unit.commandString, r"G1 X10 \\ \;Not a comment",
+            "The commandString should be the expected value."
+        )
+        self.assertEqual(
+            unit.parameterDict,
+            OrderedDict([
+                ("X", 10),
+                ("", r"\\ \;Not a comment")
+            ]),
+            "The parameterDict should be the expected value."
+        )
+
+    def test_parameters_setter_valid_whitespace(self):
+        """Test parameters setter when valid parameters are provided with extraneous whitespace."""
+        unit = GcodeParser()
+        unit.parse("G1")
+        self.assertEqual(unit.commandString, "G1", "The commandString should be 'G1'.")
+
+        unit.parameters = "   X  10 Y3.2 Foo  "
+
+        self.assertEqual(
+            unit.parameters, "X  10 Y3.2 Foo",
+            "The parameters should be the expected value."
+        )
+        self.assertEqual(
+            unit.commandString, "G1 X  10 Y3.2 Foo",
+            "The commandString should be the expected value."
+        )
+        self.assertEqual(
+            unit.parameterDict,
+            OrderedDict([
+                ("X", 10),
+                ("Y", 3.2),
+                ("F", None),
+                ("O", None),
+                ("", "Foo")
+            ]),
+            "The parameterDict should be the expected value."
+        )
+
+    def test_parameters_setter_invalid_checksum(self):
+        """Test parameters setter when parameters provided include a checksum-like value."""
+        unit = GcodeParser()
+        unit.parse("G1")
+        self.assertEqual(unit.commandString, "G1", "The commandString should be 'G1'.")
+
+        with self.assertRaises(ValueError):
+            unit.parameters = "X10 Y3.2 Foo *12"
+
+    def test_parameters_setter_invalid_comment(self):
+        """Test parameters setter when parameters provided include a comment-like value."""
+        unit = GcodeParser()
+        unit.parse("G1")
+        self.assertEqual(unit.commandString, "G1", "The commandString should be 'G1'.")
+
+        with self.assertRaises(ValueError):
+            unit.parameters = "X10 Y3.2 Foo ;Invalid"
+
+    def test_parameterItems_no_string_given(self):
+        """Test that parameterItems uses the parameters property when no string is given."""
+        unit = GcodeParser()
+        unit.parse("G1 A1BC2")
+
+        self.assertEqual(unit.parameters, "A1BC2", "The parameters should be 'A1BC2'.")
+
+        result = [item for item in unit.parameterItems()]
+
+        self.assertEqual(
+            result, [("A", 1), ("B", None), ("C", 2), ("", "BC2")],
+            "The expected result should be generated."
+        )
+
+    def test_parameterItems_custom_string(self):
+        """Test that parameterItems parses the given string when one is given."""
+        unit = GcodeParser()
+
+        self.assertIsNone(unit.parameters, "The parameters should be None.")
+
+        result = [item for item in unit.parameterItems("A1BC2")]
+
+        self.assertEqual(
+            result, [("A", 1), ("B", None), ("C", 2), ("", "BC2")],
+            "The expected result should be generated."
+        )
+
+    def test_parameterItems_empty_string(self):
+        """Test parameterItems when provided an empty string."""
+        unit = GcodeParser()
+
+        self.assertIsNone(unit.parameters, "The parameters should be None.")
+
+        result = [item for item in unit.parameterItems("")]
+
+        self.assertEqual(result, [], "An empty list should be generated.")
+
+    def test_parameterItems_whitespace_params(self):
+        """Test that parameterItems permits whitespace between parameters."""
+        unit = GcodeParser()
+        self.assertIsNone(unit.parameters, "The parameters should be None.")
+
+        result = [item for item in unit.parameterItems("A1 B C2")]
+
+        self.assertEqual(
+            result, [("A", 1), ("B", None), ("C", 2), ("", "B C2")],
+            "The expected result should be generated."
+        )
+
+    def test_parameterItems_whitespace_labels_and_values(self):
+        """Test that parameterItems permits whitespace between labels and values."""
+        unit = GcodeParser()
+        self.assertIsNone(unit.parameters, "The parameters should be None.")
+
+        result = [item for item in unit.parameterItems("A  1 B C  2")]
+
+        self.assertEqual(
+            result, [("A", 1), ("B", None), ("C", 2), ("", "B C  2")],
+            "The expected result should be generated."
+        )
+
 # TODO: test parameterDict setter?  tested indirectly through buildCommand
 
 # TODO: test validate
