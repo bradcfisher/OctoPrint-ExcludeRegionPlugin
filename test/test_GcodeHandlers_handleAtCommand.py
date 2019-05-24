@@ -19,6 +19,7 @@ class GcodeHandlersHandleAtCommandTests(TestCase):
         mockLogger = mock.Mock()
         mockState = mock.Mock()
         mockCommInstance = mock.Mock()
+        mockCommInstance.isStreaming.return_value = False
         mockEntry = mock.Mock()
 
         mockState.atCommandActions = mock.Mock(wraps={"NoMatch": [mockEntry]})
@@ -33,13 +34,14 @@ class GcodeHandlersHandleAtCommandTests(TestCase):
         mockState.disableExclusion.assert_not_called()
         mockCommInstance.sendCommand.assert_not_called()
 
-        self.assertIsNone(result, "The result should be None")
+        self.assertFalse(result, "The result should be False")
 
     def test_handleAtCommand_oneHandler_noParamMatch(self):
         """Test handleAtCommand when one command handler is defined, but the params don't match."""
         mockLogger = mock.Mock()
         mockState = mock.Mock()
         mockCommInstance = mock.Mock()
+        mockCommInstance.isStreaming.return_value = False
         mockEntry = mock.Mock()
         mockEntry.matches.return_value = None
 
@@ -55,13 +57,14 @@ class GcodeHandlersHandleAtCommandTests(TestCase):
         mockState.disableExclusion.assert_not_called()
         mockCommInstance.sendCommand.assert_not_called()
 
-        self.assertIsNone(result, "The result should be None")
+        self.assertFalse(result, "The result should be False")
 
     def test_handleAtCommand_multipleHandlers_noParamMatch(self):
         """Test handleAtCommand when multiple command handlers defined, but no param matches."""
         mockLogger = mock.Mock()
         mockState = mock.Mock()
         mockCommInstance = mock.Mock()
+        mockCommInstance.isStreaming.return_value = False
 
         mockEntry1 = mock.Mock()
         mockEntry1.matches.return_value = None
@@ -82,13 +85,14 @@ class GcodeHandlersHandleAtCommandTests(TestCase):
         mockState.disableExclusion.assert_not_called()
         mockCommInstance.sendCommand.assert_not_called()
 
-        self.assertIsNone(result, "The result should be None")
+        self.assertFalse(result, "The result should be False")
 
     def test_handleAtCommand_oneHandler_match_unsupported_action(self):
         """Test handleAtCommand with one matching handler that specifies an unsupported action."""
         mockLogger = mock.Mock()
         mockState = mock.Mock()
         mockCommInstance = mock.Mock()
+        mockCommInstance.isStreaming.return_value = False
         mockEntry = mock.Mock()
         mockEntry.action = "unsupported"
         mockEntry.matches.return_value = True
@@ -107,13 +111,14 @@ class GcodeHandlersHandleAtCommandTests(TestCase):
 
         mockLogger.warn.assert_called()
 
-        self.assertIsNone(result, "The result should be None")
+        self.assertTrue(result, "The result should be True")
 
     def test_handleAtCommand_oneHandler_match_ENABLE_EXCLUSION(self):
         """Test handleAtCommand with one matching handler that enables exclusion."""
         mockLogger = mock.Mock()
         mockState = mock.Mock()
         mockCommInstance = mock.Mock()
+        mockCommInstance.isStreaming.return_value = False
         mockEntry = mock.Mock()
         mockEntry.action = ENABLE_EXCLUSION
         mockEntry.matches.return_value = True
@@ -130,7 +135,7 @@ class GcodeHandlersHandleAtCommandTests(TestCase):
         mockState.disableExclusion.assert_not_called()
         mockCommInstance.sendCommand.assert_not_called()
 
-        self.assertIsNone(result, "The result should be None")
+        self.assertTrue(result, "The result should be True")
 
     def test_handleAtCommand_oneHandler_match_DISABLE_EXCLUSION(self):
         """Test handleAtCommand with one matching handler that disables exclusion."""
@@ -140,6 +145,7 @@ class GcodeHandlersHandleAtCommandTests(TestCase):
         mockState.disableExclusion.return_value = ["Command1", "Command2"]
 
         mockCommInstance = mock.Mock()
+        mockCommInstance.isStreaming.return_value = False
 
         mockEntry = mock.Mock()
         mockEntry.action = DISABLE_EXCLUSION
@@ -159,13 +165,14 @@ class GcodeHandlersHandleAtCommandTests(TestCase):
             [mock.call("Command1"), mock.call("Command2")]
         )
 
-        self.assertIsNone(result, "The result should be None")
+        self.assertTrue(result, "The result should be True")
 
     def test_handleAtCommand_multipleHandlers_match(self):
         """Test handleAtCommand when multiple command handlers are defined and match."""
         mockLogger = mock.Mock()
         mockState = mock.Mock()
         mockCommInstance = mock.Mock()
+        mockCommInstance.isStreaming.return_value = False
 
         mockEntry1 = mock.Mock()
         mockEntry1.action = ENABLE_EXCLUSION
@@ -191,4 +198,29 @@ class GcodeHandlersHandleAtCommandTests(TestCase):
         mockState.disableExclusion.assert_not_called()
         mockCommInstance.sendCommand.assert_not_called()
 
-        self.assertIsNone(result, "The result should be None")
+        self.assertTrue(result, "The result should be True")
+
+    def test_handleAtCommand_isSdStreaming(self):
+        """Test handleAtCommand when the commInstance indicates SD streaming."""
+        mockLogger = mock.Mock()
+        mockState = mock.Mock()
+        mockCommInstance = mock.Mock()
+        mockCommInstance.isStreaming.return_value = True
+
+        # Mock a matching entry, which should not be invoked
+        mockEntry = mock.Mock()
+        mockEntry.action = ENABLE_EXCLUSION
+        mockEntry.matches.return_value = True
+        mockState.atCommandActions = mock.Mock(wraps={"DefinedCommand": [mockEntry]})
+
+        unit = GcodeHandlers(mockState, mockLogger)
+
+        result = unit.handleAtCommand(mockCommInstance, "DefinedCommand", "params")
+
+        mockState.atCommandActions.get.assert_not_called()
+        mockEntry.matches.assert_not_called()
+        mockState.enableExclusion.assert_not_called()
+        mockState.disableExclusion.assert_not_called()
+        mockCommInstance.sendCommand.assert_not_called()
+
+        self.assertFalse(result, "The result should be False")

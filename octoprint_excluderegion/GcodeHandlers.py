@@ -435,7 +435,9 @@ class GcodeHandlers(object):
                 elif (label == "Z"):
                     position.Z_AXIS.setLogicalOffsetPosition(value)
 
-    def _handle_M206(self, cmd, gcode, subcode=None):  # nopep8 pylint: disable=unused-argument,invalid-name
+    def _handle_M206(  # pylint: disable=unused-argument,invalid-name
+        self, cmd, gcode, subcode=None
+    ):
         """
         M206 - Set home offsets.
 
@@ -454,17 +456,30 @@ class GcodeHandlers(object):
 
     def handleAtCommand(self, commInstance, cmd, parameters):
         """
-        Process registered At-Command actions.
+        Process registered @-command actions.
+
+        @-commands are only processed when the commInstance is NOT streaming to the SD card.
 
         Parameters
         ----------
         commInstance : octoprint.util.comm.MachineCom
-            The MachineCom instance to use for sending any Gcode commands produced
+            The MachineCom instance to use for determining whether streaming to SD and for sending
+            any Gcode commands produced.
         cmd : string
-            The At-Command that was encountered
+            The @-command that was encountered
         parameters : string
-            The parameters provided for the At-Command
+            The parameters provided for the @-command
+
+        Returns
+        -------
+        boolean
+            True if the command was processed, False if no action was taken (no registered action,
+            or streaming to SD).
         """
+        if (commInstance.isStreaming()):
+            return False
+
+        handled = False
         entries = self.state.atCommandActions.get(cmd)
         if (entries is not None):
             for entry in entries:
@@ -474,6 +489,7 @@ class GcodeHandlers(object):
                         entry.action, cmd, parameters
                     )
 
+                    handled = True
                     if (entry.action == ENABLE_EXCLUSION):
                         self.state.enableExclusion(cmd + " " + parameters)
                     elif (entry.action == DISABLE_EXCLUSION):
@@ -483,9 +499,12 @@ class GcodeHandlers(object):
                                 command
                             )
                             commInstance.sendCommand(command)
+
                     else:
                         self._logger.warn(
                             "handleAtCommand: unsupported action configuration encountered" +
                             ": action=%s, cmd=%s, parameters=%s",
                             entry.action, cmd, parameters
                         )
+
+        return handled

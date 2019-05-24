@@ -497,7 +497,7 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
             the last occurrence in the string.
         """
         if (self._parameters is None):
-            return {}
+            return None
 
         if (self._parameterDict is None):
             params = OrderedDict()
