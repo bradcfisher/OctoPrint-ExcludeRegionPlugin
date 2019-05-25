@@ -436,7 +436,7 @@ class GcodeHandlers(object):
                     position.Z_AXIS.setLogicalOffsetPosition(value)
 
     def _handle_M206(  # pylint: disable=unused-argument,invalid-name
-        self, cmd, gcode, subcode=None
+            self, cmd, gcode, subcode=None
     ):
         """
         M206 - Set home offsets.

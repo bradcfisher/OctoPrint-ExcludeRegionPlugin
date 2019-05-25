@@ -45,11 +45,11 @@ PAT_CODE = (
     r")"
 )
 
-# '\\', '\;' or anything but a ';'
+# '\\', '\;' or anything but a ';', '*' or eol
 # As of 1.1.9, escapes are only honored by Marlin when reading from the serial, and really only
 # affect comments, since they are dropped before other portions of the command are parsed (such as
 # checksum, etc)
-PAT_PARAMETERS_CHAR = r"(?:\\\\|\\;|[^;*])"
+PAT_PARAMETERS_CHAR = r"(?:\\\\|\\;|[^;*\r\n])"
 
 PAT_CHECKSUM = r"(?:\*(\d+))?"
 PAT_COMMENT = r"(;[^\r\n]*)?"
@@ -64,15 +64,13 @@ PAT_GCODE_LINE = (
     PAT_WHITESPACE + r"(" + PAT_PARAMETERS_CHAR + "+?)?" +
     PAT_WHITESPACE +
     PAT_CHECKSUM +
-    r")?" +
+    r")" +
     r"|" +
     r"[^;\r\n]*?" +
     r")(" + PAT_WHITESPACE + ")" +
     PAT_COMMENT +
     PAT_EOL
 )
-
-print "PAT_GCODE_LINE=" + PAT_GCODE_LINE
 
 # Regex for parsing a Gcode command type+code+subCode
 # Capture groups:
@@ -110,7 +108,6 @@ PAT_SIGNED_FLOAT = r"[-+]?[0-9]*\.?[0-9]+"
 
 # Pattern for parsing a Gcode parameter with optional floating point value.
 PAT_PARAMETER = (
-    PAT_WHITESPACE +
     r"(?:" +
     r"([A-Za-z])" +
     PAT_WHITESPACE +
@@ -127,12 +124,6 @@ PAT_PARAMETER_OR_STR = (
     r"([^A-Za-z])" +
     r")"
 )
-
-# Pattern for parsing a Gcode parameter
-# Capture groups:
-#   1 - Parameter letter char
-#   2 - Parameter value if any
-REGEX_PARAMETER = re.compile(PAT_PARAMETER)
 
 # Pattern for parsing a Gcode parameter or start of string argument
 # Capture groups:
@@ -231,7 +222,7 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
 
         Throws
         ------
-        ValueError
+        AssertionError
             If unable to parse the line
         """
         if (source is not None):
@@ -245,15 +236,9 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
             self.offset += self.length
 
         match = REGEX_GCODE_LINE.match(self.source, self.offset)
-        if (not match):
-            raise ValueError(
-                "Unable to parse gcode line: '" + self.source[self.offset:self.offset + 100] + "'"
-            )
-
-        if (match.start() != self.offset):
-            raise AssertionError(
-                "Should match at the specified offset: %s != %s" % (match.start(), self.offset)
-            )
+        assert match, "Unable to parse gcode line: Regex did not match"
+        assert match.start() == self.offset, \
+            "Unable to parse gcode line: Regex matched at incorrect offset"
 
         self.length = match.end() - self.offset
 
@@ -459,6 +444,7 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
 
         regex = REGEX_PARAMETER_OR_STR
         match = regex.match(source, offset)
+
         while (match):
             name = match.group(1)
             if (name):
@@ -468,12 +454,10 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
                     value = float(value)
                 elif (stringArgOffset is None):
                     stringArgOffset = match.start(1)
-                    regex = REGEX_PARAMETER
 
                 yield (name, value)
             elif (stringArgOffset is None):
                 stringArgOffset = match.start(3)
-                regex = REGEX_PARAMETER
 
             offset = match.end()
             match = regex.match(source, offset)
@@ -516,17 +500,19 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
 
         Parameters
         ----------
-        paramsDict : dictionary
+        paramsDict : dictionary | None
             The argument names and values to apply to the command (e.g. E=1.2, X=100, Y=200).
             If the associated value is None or an empty string, the argument will be added to the
             command with no associated value.
         """
         vals = []
-        for key, val in paramsDict.iteritems():
-            if (val is not None):
-                vals.append(key + str(val))
-            else:
-                vals.append(key)
+        if (paramsDict is not None):
+            for key, val in paramsDict.iteritems():
+                if (val is not None):
+                    key += str(val)
+
+                if (key):
+                    vals.append(key)
 
         if (vals):
             self._updateParameters(" ".join(vals))
@@ -565,9 +551,10 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
         """Return the non-normalized checksum text parsed, including '*' prefix, or None."""
         return self._rawChecksum
 
-    def stringify(
+    def stringify(  # pylint: disable=too-many-arguments
             self,
             separator=" ",
+            includeLeadingWhitespace=True,
             includeLineNumber=True,
             includeChecksum=None,
             includeComment=True,
@@ -581,6 +568,8 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
         separator : string
             The separator to use between the individual command components.  Defaults to a single
             space.
+        includeLeadingWhitespace : boolean
+            Whether to include the leading whitespace in the result or not.  Defaults to True
         includeLineNumber : boolean
             Whether to include the line number in the result (if a line number is known).  Defaults
             to True.
@@ -615,11 +604,12 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
             result = separator.join(pieces)
             if (includeChecksum):
                 result += separator
-                checksum = self.computeChecksum(result)
+                checksum = "*" + str(self.computeChecksum(result))
 
         includeComment = includeComment and (self.comment is not None)
 
         return (
+            (self.leadingWhitespace if (includeLeadingWhitespace) else "") +
             result + checksum +
             ((separator + self.comment) if (includeComment) else "") +
             (self.eol if (includeEol) else "")
@@ -627,7 +617,13 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
 
     @property
     def commandString(self):
-        """Return the normalized gcode string, not including the checksum, comment or eol."""
+        """
+        Return the normalized gcode string, not including the checksum, comment or eol.
+
+        This is the equivalent of `stringify(includeChecksum=False, includeComment=False,
+        includeEol=False)` with the exception that the value is cached and not recomputed for each
+        invocation.
+        """
         if (self._commandString is None):
             self._commandString = self.stringify(
                 includeChecksum=False,
@@ -662,5 +658,9 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
         )
 
     def __str__(self):
-        """Return the full normalized gcode line, possibly with checksum, comment and eol."""
+        """
+        Return the full normalized gcode line, possibly with checksum, comment and eol.
+
+        This is the equivalent of calling `stringify()`.
+        """
         return self.stringify()

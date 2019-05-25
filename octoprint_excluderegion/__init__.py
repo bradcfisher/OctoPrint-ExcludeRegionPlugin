@@ -608,6 +608,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
 
         for gcode in self.gcodeHandlers.gcodeParser.parseLines(gcodeString):
             line = gcode.stringify(
+                includeLeadingWhitespace=False,
                 includeLineNumber=False,
                 includeComment=False,
                 includeEol=False

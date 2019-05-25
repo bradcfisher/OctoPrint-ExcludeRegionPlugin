@@ -165,6 +165,35 @@ class TestCase(unittest.TestCase):
             raise AssertionError(msg)
 
 
+def regex_match_to_string(match):
+    """Represent a re.Match object as a string."""
+    if (match is None):
+        return "Match<None>"
+
+    groups = []
+    for groupIndex in range(0, match.re.groups + 1):
+        groups.append(
+            "{index=%s, start=%s, end=%s, value=%s}" % (
+                groupIndex,
+                match.start(groupIndex),
+                match.end(groupIndex),
+                repr(match.group(groupIndex))
+            )
+        )
+
+    pieces = [
+        "Match<"
+        "pos=", str(match.pos),
+        ", endpos=", str(match.endpos),
+        ", lastindex=", str(match.lastindex),
+        ", lastgroup=", str(match.lastgroup),
+        ", groups=[", ",\n".join(groups),
+        "]>"
+    ]
+
+    return "".join(pieces)
+
+
 def create_position(x=None, y=None, z=None, extruderPosition=0, unitMultiplier=1):
     """
     Create a new Position object with a specified position and unit multiplier.
