@@ -9,12 +9,20 @@ modularized and updated to follow common Python code formatting and quality stan
 - Reduced the level for certain logging calls to improve performance for most users by reducing
   writes to the log
   > Resolves [#9](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/9), [#26](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/26)
-- Fix a couple of Python code issues with arc processing
+- Corrected several issues with arc processing: Use the current logical position instead of the
+  native position, compute a more appropriate number of segments, correct initial angle calculation,
+  fix logic for arc inversion factor (e), prevent exception when radius value is smaller than half
+  the distance between the end points, correct arcLength computation to be tolerant of negative
+  travel angle.
   > Resolves [#18](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/18)
 - Correct computation of logical position offset (G92)
 - Correct nativeToLogical computation when provided value is None
 - No longer calls `__init__` to reset the exclude regions to avoid a bug relating to the
   g90InfluencesExtruder setting retrieval
+- Preserve Gcode parameters for firmware retraction/recovery commands (G10/G11) to ensure the same
+  length of filament is extruded/retracted as was previously retracted/extruded
+- Added script hook to ensure that exclusion cleanup actions are performed on successful print
+  completion, if needed
 
 ### Changed
 
