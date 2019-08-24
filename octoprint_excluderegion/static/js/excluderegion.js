@@ -808,24 +808,6 @@ $(function() {
     self.onBeforeBinding = function() {
       self.settings = self.global_settings.settings.plugins.excluderegion;
       console.log("onBeforeBinding: settings=", self.settings);
-      self.onEventSettingsUpdated();
-    }
-
-    self.onEventSettingsUpdated = function() {
-      console.log("onEventSettingsUpdated: settings=", self.settings);
-
-// TODO: This sorting should happen _before_ saving (would that need to be in the python code?)
-      self.extendedExcludeGcodes = self.settings.extendedExcludeGcodes.sort(
-        function(a, b) {
-          var uca = a.gcode().toLocaleUpperCase();
-          var ucb = b.gcode().toLocaleUpperCase();
-          if (uca < ucb)
-            return -1;
-          if (uca > ucb)
-            return 1;
-          return 0;
-        }
-      );
     }
 
     self.addExtendedGcode = function() {

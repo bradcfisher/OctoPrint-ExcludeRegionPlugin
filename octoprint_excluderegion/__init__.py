@@ -2,16 +2,15 @@
 """OctoPrint plugin adding the ability to prevent printing in rectangular or circular regions."""
 
 # Thoughts on improvements:
-# - Add a way to persist the defined regions for the selected file and restore them if the file
+# - Persist the defined regions for the selected file and restore them if the file
 #   is selected again later?
-#   - Perhaps add comments into the gcode file itself to define the regions?
-#     Could possibly add comments that could be used by the cancelobject plugin
-#   - If stored as metadata, make sure to compare file hash to ensure it's the same file data
+#   - Add @-commands into the gcode file itself to define the regions? (assuming the regions should be modifiable)
+#   - Store the regions as metadata?  May want to compare file hash to make sure the file hasn't been updated since the regions were defined.
+#   - Simply create a copy of the file with the excluded Gcode removed?  This would probably print the cleanest,
+#     but would not allow restoring previously excluded regions without going back to the original file.
 #
-# - Figure out a way to determine we've reached the end script and should no longer exclude moves?
-#   Likewise, a similar setting for determining when the start gcode has finished.
-#   Perhaps use a similar method to the Cancel Object plugin, which processes the file when it's
-#   uploaded to find specific comment markers and adds @-commands at that point
+# - Preprocess the file to add @-commands to mark the begin/end Gcode scripts based on comments,
+#   similar to the Cancel Object plugin?
 #
 # - Is a setting needed for controlling how big a retraction is recorded as one that needs to be
 #   recovered after exiting an excluded region (e.g. ignore small retractions like E-0.03)?
