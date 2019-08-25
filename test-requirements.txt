@@ -1,0 +1,11 @@
+# Packages required for running tests, coverage or linting
+
+pip
+coverage
+mock
+callee
+sphinx
+configparser
+pylint
+pylama
+https://get.octoprint.org/latest
