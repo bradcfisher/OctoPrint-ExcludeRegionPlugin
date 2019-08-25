@@ -1,5 +1,5 @@
 
-## [0.2.0] - UNRELEASED
+## [0.2.0] - 2019-08-25
 
 This version is a major refresh of the underlying code.  Many enhancements and bug fixes have been
 made to the functionality, several configuration settings have been added, and the code has been
