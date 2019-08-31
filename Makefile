@@ -58,8 +58,9 @@ $(TESTENV):
 		&& $(PIP) install --upgrade pip
 
 $(COMMON_DEPS_INSTALLED): $(TESTENV)
+  # Should be able to remove --no-use-pep517 once pip/setuptools fix the bootstrapping errors caused by PEP 517 in pip >= 19.0 (https://github.com/pypa/setuptools/issues/1644)
 	. $(ACTIVATE_TESTENV) \
-		&& $(PIP) $(PIP_CACHE_ARGS) install --upgrade -r test-requirements.txt \
+		&& $(PIP) $(PIP_CACHE_ARGS) install --upgrade -r test-requirements.txt --no-use-pep517 \
 		&& $(PIP) $(PIP_CACHE_ARGS) install -e .
 	touch $(COMMON_DEPS_INSTALLED)
 

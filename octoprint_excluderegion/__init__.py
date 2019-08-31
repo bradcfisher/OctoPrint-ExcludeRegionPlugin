@@ -417,6 +417,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
         )):
             self._logger.info("Printing stopped: event=%s", event)
             self._activePrintJob = False
+
             if (self.clearRegionsAfterPrintFinishes):
                 self.state.resetState(True)
                 self._notifyExcludedRegionsChanged()
