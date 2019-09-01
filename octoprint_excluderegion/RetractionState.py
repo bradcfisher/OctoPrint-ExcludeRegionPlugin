@@ -85,11 +85,11 @@ class RetractionState(CommonMixin):
         """
         if (self.allowCombine):
             if (self.firmwareRetract == other.firmwareRetract):
-                if (not self.firmwareRetract) and (not self.recoverExcluded):
+                if (not self.firmwareRetract):
                     self.extrusionAmount += other.extrusionAmount
-            elif (logger is not None):
+            else:
                 logger.warn("Encountered mix of firmware and non-firmware retractions.  Extruder position may not be tracked correctly.")
-        elif (logger is not None):
+        else:
             logger.warn("Cannot combine retractions, since allowCombine = False")
 
         return self

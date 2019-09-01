@@ -118,8 +118,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 "The result should be an empty list."
             )
 
-    def test_recordRetraction_noRecoverExcluded_excluding(self):
-        """Test recordRetraction with recoverExcluded=False and excluding."""
+    def test_recordRetraction_noRecoverExcluded_allowCombine_excluding(self):
+        """Test recordRetraction with recoverExcluded=False, allowCombine=True and excluding."""
         expectedReturnCommands = ["addedCommand"]
 
         mockRetractionState = mock.Mock()
@@ -129,17 +129,58 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         unit = ExcludeRegionState(mockLogger)
         with mock.patch.object(unit, 'lastRetraction'):
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
             unit.excluding = True
 
             returnCommands = unit.recordRetraction(mockRetractionState)
 
+            unit.lastRetraction.combine.assert_called_with(mockRetractionState, mockLogger)
             mockRetractionState.generateRetractCommands.assert_called_with(unit.position)
             self.assertEqual(
                 returnCommands, expectedReturnCommands,
                 "The result from generateRetractCommands should be returned."
             )
 
-    def test_recordRetraction_noRecoverExcluded_notExcluding(self):
+    def test_recordRetraction_noRecoverExcluded_allowCombine_notExcluding(self):
+        """Test recordRetraction with recoverExcluded=False, allowCombine=True and not excluding."""
+        expectedReturnCommands = ["retractionCommand"]
+
+        mockRetractionState = mock.Mock()
+        mockRetractionState.originalCommand = "retractionCommand"
+
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        with mock.patch.object(unit, 'lastRetraction'):
+            unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
+            unit.excluding = False
+
+            returnCommands = unit.recordRetraction(mockRetractionState)
+            
+            self.assertEqual(
+                returnCommands, expectedReturnCommands,
+                "The original command should be returned"
+            )
+
+    def test_recordRetraction_noRecoverExcluded_noCombine_excluding(self):
+        """Test recordRetraction with recoverExcluded=False and excluding."""
+        mockRetractionState = mock.Mock()
+
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        with mock.patch.object(unit, 'lastRetraction'):
+            unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = False
+            unit.excluding = True
+
+            returnCommands = unit.recordRetraction(mockRetractionState)
+
+            self.assertEqual(
+                returnCommands, [],
+                "The result should be an empty list."
+            )
+
+    def test_recordRetraction_noRecoverExcluded_noCombine_notExcluding(self):
         """Test recordRetraction with recoverExcluded=False and not excluding."""
         mockRetractionState = mock.Mock()
         mockRetractionState.originalCommand = "retractionCommand"
@@ -148,6 +189,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         unit = ExcludeRegionState(mockLogger)
         with mock.patch.object(unit, 'lastRetraction'):
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = False
             unit.excluding = False
 
             returnCommands = unit.recordRetraction(mockRetractionState)
@@ -155,7 +197,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             mockRetractionState.generateRetractCommands.assert_not_called()
             self.assertEqual(
                 returnCommands, ["retractionCommand"],
-                "The original retraction command should be appended to the command list passed in."
+                "The original command should be returned"
             )
 
     def test_recoverRetraction_recoverExcluded(self):
@@ -202,6 +244,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         ) as mocks:
             unit.excluding = True
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
 
             result = unit.recoverRetractionIfNeeded("G11", True)
 
@@ -216,6 +259,10 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             self.assertTrue(
                 unit.lastRetraction.recoverExcluded,
                 "recoverExcluded should be set to True"
+            )
+            self.assertFalse(
+                unit.lastRetraction.allowCombine,
+                "allowCombine should be set to False"
             )
             self.assertEqual(
                 result, [],
@@ -233,6 +280,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         ) as mocks:
             unit.excluding = True
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
 
             result = unit.recoverRetractionIfNeeded("G1 X1 Y2 E3", False)
 
@@ -243,6 +291,10 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             self.assertEqual(
                 unit.lastRetraction, mocks["lastRetraction"],
                 "The lastRetraction should not be updated"
+            )
+            self.assertFalse(
+                unit.lastRetraction.allowCombine,
+                "allowCombine should be set to False"
             )
             self.assertFalse(
                 unit.lastRetraction.recoverExcluded,
@@ -264,6 +316,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         ) as mocks:
             unit.excluding = False
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
             mocks["_recoverRetraction"].return_value = ["expectedCommand"]
 
             result = unit.recoverRetractionIfNeeded("G11", True)
@@ -272,6 +325,10 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             self.assertEqual(
                 unit.lastRetraction, mocks["lastRetraction"],
                 "The lastRetraction should not be updated"
+            )
+            self.assertFalse(
+                unit.lastRetraction.allowCombine,
+                "allowCombine should be set to False"
             )
             self.assertFalse(
                 unit.lastRetraction.recoverExcluded,

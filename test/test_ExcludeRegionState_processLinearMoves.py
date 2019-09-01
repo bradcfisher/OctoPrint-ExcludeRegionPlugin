@@ -30,27 +30,38 @@ class ExcludeRegionStateProcessLinearMovesTests(
         unit.feedRate = 4000
         unit.feedRateUnitMultiplier = INCH_TO_MM_FACTOR
 
+        originalIsAnyPointExcluded = unit.isAnyPointExcluded
+        def isAnyPointExcluded_side_effect(self, *args):
+            originalIsAnyPointExcluded(self, *args)
+            return True
+
         with mock.patch.multiple(
             unit,
             _processNonMove=mock.DEFAULT,
+            isAnyPointExcluded=mock.DEFAULT,
             enterExcludedRegion=mock.DEFAULT,
             exitExcludedRegion=mock.DEFAULT,
             recoverRetractionIfNeeded=mock.DEFAULT,
             ignoreGcodeCommand=mock.DEFAULT
         ) as mocks:
+            mocks["isAnyPointExcluded"].side_effect = isAnyPointExcluded_side_effect
+            mocks["enterExcludedRegion"].return_value = ["enterExcludedRegion"]
+            mocks["_processNonMove"].return_value = ["processNonMove"]
+
             result = unit.processLinearMoves("G1 X1 Y2 Z3 E-1 F100", -1, 100, 3, 1, 2)
 
-            mocks["_processNonMove"].assert_not_called()
-            mocks["enterExcludedRegion"].assert_not_called()
+            mocks["isAnyPointExcluded"].assert_called_with(1, 2)
+            mocks["enterExcludedRegion"].assert_called_with("G1 X1 Y2 Z3 E-1 F100")
             mocks["exitExcludedRegion"].assert_not_called()
             mocks["recoverRetractionIfNeeded"].assert_not_called()
             mocks["ignoreGcodeCommand"].assert_not_called()
+            mocks["_processNonMove"].assert_called_with("G1 X1 Y2 Z3 E-1 F100", -4 - 1 * INCH_TO_MM_FACTOR)
             self.assertEqual(
                 unit.feedRate, 100 * INCH_TO_MM_FACTOR,
                 "The feedRate should be updated to the expected value."
             )
             self.assertEqual(
-                result, ["G1 X1 Y2 Z3 E-1 F100"],
+                result, ["enterExcludedRegion", "processNonMove"],
                 "The expected result should be returned."
             )
             self.assertEqual(
@@ -244,16 +255,21 @@ class ExcludeRegionStateProcessLinearMovesTests(
         unit.feedRate = 4000
         unit.feedRateUnitMultiplier = 1
 
-        result = unit.processLinearMoves("G1 X2 Y3 E0", 0, None, None, 2, 3)
+        with mock.patch.object(unit, 'recoverRetractionIfNeeded') as mockRecoverRetractionIfNeeded:
+            mockRecoverRetractionIfNeeded.return_value = ["expectedResult"]
 
-        self.assertEqual(
-            unit.position.E_AXIS.current, 0,
-            "The extruder position should be updated to the new value"
-        )
-        self.assertEqual(
-            result, ["G1 X2 Y3 E0"],
-            "It should return a list containing the provided command"
-        )
+            result = unit.processLinearMoves("G1 X2 Y3 E0", 0, None, None, 2, 3)
+
+            mockRecoverRetractionIfNeeded.assert_called_with("G1 X2 Y3 E0", False)
+
+            self.assertEqual(
+                unit.position.E_AXIS.current, 0,
+                "The extruder position should be updated to the new value"
+            )
+            self.assertEqual(
+                result, ["expectedResult"],
+                "It should return the result of recoverRetractionIfNeeded"
+            )
 
     def test_processLinearMoves_feedRate_None(self):
         """Test processLinearMoves when None is passed for a feedRate value."""
@@ -400,17 +416,20 @@ class ExcludeRegionStateProcessLinearMovesTests(
         with mock.patch.multiple(
             unit,
             isAnyPointExcluded=mock.DEFAULT,
-            enterExcludedRegion=mock.DEFAULT
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
         ) as mocks:
             mocks["isAnyPointExcluded"].return_value = True
+            mocks["_processNonMove"].return_value = ["processNonMove"]
 
-            result = unit.processLinearMoves("G1 X10 Y20", None, None, None, 10, 20)
+            result = unit.processLinearMoves("G1 X10 Y20", 5, None, None, 10, 20)
 
             mocks["isAnyPointExcluded"].assert_called_with(10, 20)
             mocks["enterExcludedRegion"].assert_not_called()
+            mocks["_processNonMove"].assert_called_with("G1 X10 Y20", 1)
             self.assertEqual(
-                result, (None,),
-                "The result should indicate to drop/ignore the command"
+                result, ["processNonMove"],
+                "The result should be the commands returned by _processNonMove"
             )
 
     def test_processLinearMoves_excluding_noPointInExcludedRegion(self):
@@ -425,7 +444,8 @@ class ExcludeRegionStateProcessLinearMovesTests(
         with mock.patch.multiple(
             unit,
             isAnyPointExcluded=mock.DEFAULT,
-            exitExcludedRegion=mock.DEFAULT
+            exitExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
         ) as mocks:
             mocks["isAnyPointExcluded"].return_value = False
             mocks["exitExcludedRegion"].return_value = ["expectedResult"]
@@ -434,6 +454,7 @@ class ExcludeRegionStateProcessLinearMovesTests(
 
             mocks["isAnyPointExcluded"].assert_called_with(10, 20)
             mocks["exitExcludedRegion"].assert_called_with("G1 X10 Y20")
+            mocks["_processNonMove"].assert_not_called()
             self.assertEqual(
                 result, ["expectedResult"],
                 "The result of exitExcludedRegion should be returned."
@@ -451,18 +472,21 @@ class ExcludeRegionStateProcessLinearMovesTests(
         with mock.patch.multiple(
             unit,
             isAnyPointExcluded=mock.DEFAULT,
-            enterExcludedRegion=mock.DEFAULT
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
         ) as mocks:
             mocks["isAnyPointExcluded"].return_value = True
-            mocks["enterExcludedRegion"].return_value = ["expectedResult"]
+            mocks["enterExcludedRegion"].return_value = ["enterExcludedRegion"]
+            mocks["_processNonMove"].return_value = ["processNonMove"]
 
-            result = unit.processLinearMoves("G1 X10 Y20", None, None, None, 10, 20)
+            result = unit.processLinearMoves("G1 X10 Y20", 5, None, None, 10, 20)
 
             mocks["isAnyPointExcluded"].assert_called_with(10, 20)
             mocks["enterExcludedRegion"].assert_called_with("G1 X10 Y20")
+            mocks["_processNonMove"].assert_called_with("G1 X10 Y20", 1)
             self.assertEqual(
-                result, ["expectedResult"],
-                "The result of enterExcludedRegion should be returned."
+                result, ["enterExcludedRegion", "processNonMove"],
+                "The result of both enterExcludedRegion and processNonMove should be returned."
             )
 
     def test_processLinearMoves_notExcluding_noPointInExcludedRegion(self):

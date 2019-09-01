@@ -45,7 +45,7 @@ from .GcodeHandlers import GcodeHandlers
 from .ExcludeRegionState import ExcludeRegionState
 from .RectangularRegion import RectangularRegion
 from .CircularRegion import CircularRegion
-from .ExcludedGcode import ExcludedGcode, EXCLUDE_ALL, EXCLUDE_MERGE
+from .ExcludedGcode import ExcludedGcode, EXCLUDE_ALL, EXCLUDE_MERGE, EXCLUDE_EXCEPT_LAST
 from .AtCommandAction import AtCommandAction, ENABLE_EXCLUSION, DISABLE_EXCLUSION
 
 
@@ -212,6 +212,19 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
                     "mode": EXCLUDE_MERGE,
                     "description": "Record advanced setting changes while excluding and apply " +
                                    "the most recent values in a single command after exiting the " +
+                                   "excluded area"
+                },
+                {
+                    "gcode": "M117",
+                    "mode": EXCLUDE_EXCEPT_LAST,
+                    "description": "Suppress display messages while excluding and output the " +
+                                   "last message encountered when exiting the excluded area"
+                },
+                {
+                    "gcode": "M73",
+                    "mode": EXCLUDE_MERGE,
+                    "description": "Suppress progress updates while excluding and output the " +
+                                   "most recent progress values encountered when exiting the " +
                                    "excluded area"
                 }
             ],
