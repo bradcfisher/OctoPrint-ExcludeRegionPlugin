@@ -156,7 +156,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             unit.excluding = False
 
             returnCommands = unit.recordRetraction(mockRetractionState)
-            
+
             self.assertEqual(
                 returnCommands, expectedReturnCommands,
                 "The original command should be returned"
@@ -475,6 +475,91 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 "The result should be a list containing the command"
             )
 
+    def test_processExcludedMove_excluding_retract(self):
+        """Test _processExcludedMove with a retraction while moving and excluding=True."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        unit.excluding = True
+
+        with mock.patch.multiple(
+            unit,
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
+        ) as mocks:
+            mocks["_processNonMove"].return_value = ["processNonMove"]
+
+            result = unit._processExcludedMove("G1 X10 Y20", -1)  # pylint: disable=protected-access
+
+            mocks["enterExcludedRegion"].assert_not_called()
+            mocks["_processNonMove"].assert_called_with("G1 X10 Y20", -1)
+            self.assertEqual(
+                result, ["processNonMove"],
+                "The result should be the commands returned by _processNonMove"
+            )
+
+    def test_processExcludedMove_excluding_nonRetract(self):
+        """Test _processExcludedMove with a non-retraction move and excluding=True."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        unit.excluding = True
+
+        with mock.patch.multiple(
+            unit,
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
+        ) as mocks:
+            result = unit._processExcludedMove("G1 X10 Y20", 0)  # pylint: disable=protected-access
+
+            mocks["enterExcludedRegion"].assert_not_called()
+            mocks["_processNonMove"].assert_not_called()
+            self.assertEqual(result, [], "The result should be an empty list")
+
+    def test_processExcludedMove_notExcluding_retract(self):
+        """Test _processExcludedMove with a retraction while moving and excluding=False."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        unit.excluding = False
+
+        with mock.patch.multiple(
+            unit,
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
+        ) as mocks:
+            mocks["enterExcludedRegion"].return_value = ["enterExcludedRegion"]
+            mocks["_processNonMove"].return_value = ["processNonMove"]
+
+            result = unit._processExcludedMove("G1 X10 Y20", -1)  # pylint: disable=protected-access
+
+            mocks["enterExcludedRegion"].assert_called_with("G1 X10 Y20")
+            mocks["_processNonMove"].assert_called_with("G1 X10 Y20", -1)
+            self.assertEqual(
+                result, ["enterExcludedRegion", "processNonMove"],
+                "The result should contain the expected commands"
+            )
+
+    def test_processExcludedMove_notExcluding_nonRetract(self):
+        """Test _processExcludedMove with a non-retraction move and excluding=False."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        unit.excluding = False
+
+        with mock.patch.multiple(
+            unit,
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
+        ) as mocks:
+            mocks["enterExcludedRegion"].return_value = ["enterExcludedRegion"]
+
+            result = unit._processExcludedMove("G1 X10 Y20", 0)  # pylint: disable=protected-access
+
+            mocks["enterExcludedRegion"].assert_called_with("G1 X10 Y20")
+            mocks["_processNonMove"].assert_not_called()
+            self.assertEqual(
+                result,
+                ["enterExcludedRegion"],
+                "The result should be the commands returned by enterExcludedRegion"
+            )
+
     def test_enterExcludedRegion_exclusionDisabled(self):
         """Test enterExcludedRegion when exclusion is disabled should raise an AssertionError."""
         mockLogger = mock.Mock()
@@ -484,8 +569,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         with self.assertRaises(AssertionError):
             unit.enterExcludedRegion("G1 X1 Y2")
 
-    def test_exitExcludedRegion_excluding(self):
-        """Test exitExcludedRegion when already excluding."""
+    def test_enterExcludedRegion_excluding(self):
+        """Test enterExcludedRegion when already excluding."""
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
 

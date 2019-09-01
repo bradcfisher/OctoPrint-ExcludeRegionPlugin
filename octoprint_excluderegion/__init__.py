@@ -4,10 +4,13 @@
 # Thoughts on improvements:
 # - Persist the defined regions for the selected file and restore them if the file
 #   is selected again later?
-#   - Add @-commands into the gcode file itself to define the regions? (assuming the regions should be modifiable)
-#   - Store the regions as metadata?  May want to compare file hash to make sure the file hasn't been updated since the regions were defined.
-#   - Simply create a copy of the file with the excluded Gcode removed?  This would probably print the cleanest,
-#     but would not allow restoring previously excluded regions without going back to the original file.
+#   - Add @-commands into the gcode file itself to define the regions? (assuming the regions
+#     should be modifiable)
+#   - Store the regions as metadata?  May want to compare file hash to make sure the file hasn't
+#     been updated since the regions were defined.
+#   - Simply create a copy of the file with the excluded Gcode removed?  This would probably print
+#     the cleanest, but would not allow restoring previously excluded regions without going back to
+#     the original file.
 #
 # - Preprocess the file to add @-commands to mark the begin/end Gcode scripts based on comments,
 #   similar to the Cancel Object plugin?

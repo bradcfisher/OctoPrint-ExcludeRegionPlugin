@@ -14,7 +14,8 @@ class RetractionStateTests(TestCase):
     """Unit tests for the RetractionState class."""
 
     expectedProperties = [
-        "recoverExcluded", "allowCombine", "firmwareRetract", "extrusionAmount", "feedRate", "originalCommand"
+        "recoverExcluded", "allowCombine", "firmwareRetract", "extrusionAmount",
+        "feedRate", "originalCommand"
     ]
 
     def test_constructor_firmwareRetraction(self):
@@ -197,7 +198,7 @@ class RetractionStateTests(TestCase):
 
         result = unit.combine(toCombine, mockLogger)
 
-        self.assertIs(result, unit, "The return value should be the instance the method is called on")
+        self.assertIs(result, unit, "The return value should be the unit instance")
         self.assertIsNone(unit.extrusionAmount, "extrusionAmount should be None")
         self.assertTrue(unit.firmwareRetract, "firmwareRetract should be True")
         mockLogger.warn.assert_not_called()
@@ -222,7 +223,7 @@ class RetractionStateTests(TestCase):
 
         result = unit.combine(toCombine, mockLogger)
 
-        self.assertIs(result, unit, "The return value should be the instance the method is called on")
+        self.assertIs(result, unit, "The return value should be the unit instance")
         self.assertEqual(unit.extrusionAmount, 1.5, "The extrusionAmount should be updated to 1.5")
         mockLogger.warn.assert_not_called()
 
@@ -246,8 +247,8 @@ class RetractionStateTests(TestCase):
         )
 
         result = unit.combine(toCombine, mockLogger)
-        
-        self.assertIs(result, unit, "The return value should be the instance the method is called on")
+
+        self.assertIs(result, unit, "The return value should be the unit instance")
         self.assertEqual(unit.extrusionAmount, 1, "The extrusionAmount should not be modified")
         mockLogger.warn.assert_called()
 
@@ -267,8 +268,8 @@ class RetractionStateTests(TestCase):
         )
 
         result = unit.combine(toCombine, mockLogger)
-        
-        self.assertIs(result, unit, "The return value should be the instance the method is called on")
+
+        self.assertIs(result, unit, "The return value should be the unit instance")
         self.assertTrue(unit.firmwareRetract, "firmwareRetract should be True")
         self.assertIsNone(unit.extrusionAmount, "The extrusionAmount should not be modified")
         mockLogger.warn.assert_called()
@@ -291,6 +292,6 @@ class RetractionStateTests(TestCase):
 
         result = unit.combine(toCombine, mockLogger)
 
-        self.assertIs(result, unit, "The return value should be the instance the method is called on")
+        self.assertIs(result, unit, "The return value should be the unit instance")
         self.assertEqual(unit.extrusionAmount, 1, "The extrusionAmount should not be modified")
         mockLogger.warn.assert_called()

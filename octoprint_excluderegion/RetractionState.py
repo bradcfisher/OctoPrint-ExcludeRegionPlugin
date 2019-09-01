@@ -30,7 +30,8 @@ class RetractionState(CommonMixin):
         excluded, it will need to be processed later.
     allowCombine : boolean
         Whether this retraction should be combined with subsequent retractions or not.  Retractions
-        may be combined as long as there is no extrusion/recovery executed between the two retractions.
+        may be combined as long as there is no extrusion/recovery executed between the two
+        retractions.
     """
 
     def __init__(
@@ -72,7 +73,7 @@ class RetractionState(CommonMixin):
 
     def combine(self, other, logger):
         """
-        Combines the retraction amount from the specified other instance with this instance.
+        Combine the retraction amount from the specified other instance with this instance.
 
         Parameters
         ----------
@@ -88,7 +89,10 @@ class RetractionState(CommonMixin):
                 if (not self.firmwareRetract):
                     self.extrusionAmount += other.extrusionAmount
             else:
-                logger.warn("Encountered mix of firmware and non-firmware retractions.  Extruder position may not be tracked correctly.")
+                logger.warn(
+                    "Encountered mix of firmware and non-firmware retractions.  " +
+                    "Extruder position may not be tracked correctly."
+                )
         else:
             logger.warn("Cannot combine retractions, since allowCombine = False")
 

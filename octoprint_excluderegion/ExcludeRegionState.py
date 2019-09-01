@@ -392,15 +392,14 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
                 self.lastRetraction.feedRate = self.feedRate
         elif (self.lastRetraction.allowCombine):
             # Multiple retractions have been encountered without any intervening recovery/extrusion.
-            # This type of retraction can be genrated by Slic3r when retraction is enabled along with
-            # wipe or retract_layer_change.  That combination of options can generate multiple
+            # This type of retraction can be genrated by Slic3r when retraction is enabled along
+            # with wipe or retract_layer_change.  That combination of options can generate multiple
             # retractions as part of the wipe or layer changed moves.
 
             self.lastRetraction.combine(retract, self._logger)
 
             if (self.excluding):
-                # TODO: Switch this back to debug after testing
-                self._logger.info(
+                self._logger.debug(
                     "Encountered multiple retractions without an intervening recovery " +
                     "(excluding=%s). Allowing this retraction to proceed: %s",
                     self.excluding, retract
@@ -414,7 +413,9 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             # retraction state no longer permits accumulating more retraction (e.g. some
             # extrusion/recovery occurred between the prior retraction and this retraction.
             # In this case, we simply ignore the retraction to prevent over-retracting the filament.
-            self._logger.debug("Suppressing retraction following excluded recover (already retracted)")
+            self._logger.debug(
+                "Suppressing retraction following excluded recover (already retracted)"
+            )
         else:
             # Let it pass unhindered
             returnCommands.append(retract.originalCommand)
@@ -583,6 +584,35 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         return []
 
+    def _processExcludedMove(self, cmd, deltaE):
+        """
+        Process a command for which some point falls within an excluded region.
+
+        Parameters
+        ----------
+        cmd : Gcode command string
+            The Gcode command that is being processed.  Typically a G0/G1 with some X/Y/Z component.
+        deltaE : number
+            The offset to apply to the extruder position, in millimeters.
+
+        Returns
+        -------
+        List of Gcode commands
+            The Gcode command(s) to execute, or an empty list if none were generated.  It is up to
+            the caller to ensure these commands are sent to the printer.
+        """
+        if (not self.excluding):
+            returnCommands = self.enterExcludedRegion(cmd)
+        else:
+            returnCommands = []
+
+        if (deltaE < 0):
+            # To accommodate for Slic3r retraction behavior, check for retractions
+            # for moves as well.
+            returnCommands.extend(self._processNonMove(cmd, deltaE))
+
+        return returnCommands
+
     def processLinearMoves(self, cmd, extruderPosition, feedRate, finalZ, *xyPairs):
         """
         Process the specified moves to update the position state and determine whether to exclude.
@@ -666,14 +696,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             # for Marlin 1.1.9).
             returnCommands = self._processNonMove(cmd, deltaE)
         elif (self.isAnyPointExcluded(*xyPairs)):
-            if (not self.excluding):
-                returnCommands = self.enterExcludedRegion(cmd)
-            else:
-                returnCommands = []
-
-            # To accommodate for Slic3r retraction behavior, check for retractions & recoveries
-            # for moves as well.
-            returnCommands.extend(self._processNonMove(cmd, deltaE))
+            returnCommands = self._processExcludedMove(cmd, deltaE)
         elif (self.excluding):
             # Moving from an excluded region into a non-excluded region.
             # Processes the necessary commands to move the tool to the new position specified by the
