@@ -769,7 +769,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         returnCommands = []
 
         if (self.pendingCommands):
-            for gcode, cmdArgs in self.pendingCommands.iteritems():
+            for gcode, cmdArgs in self.pendingCommands.items():
                 if (isinstance(cmdArgs, Mapping)):
                     returnCommands.append(
                         self.gcodeParser.buildCommand(gcode, **cmdArgs)

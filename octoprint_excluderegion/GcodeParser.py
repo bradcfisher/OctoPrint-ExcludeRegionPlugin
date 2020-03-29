@@ -507,7 +507,7 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
         """
         vals = []
         if (paramsDict is not None):
-            for key, val in paramsDict.iteritems():
+            for key, val in paramsDict.items():
                 if (val is not None):
                     key += str(val)
 
