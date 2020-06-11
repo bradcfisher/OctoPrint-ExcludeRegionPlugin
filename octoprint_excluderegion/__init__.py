@@ -55,6 +55,7 @@ from .AtCommandAction import AtCommandAction, ENABLE_EXCLUSION, DISABLE_EXCLUSIO
 __plugin_name__ = "Exclude Region"
 __plugin_implementation__ = None
 __plugin_hooks__ = None
+__plugin_pythoncompat__ = ">=2.7,<4"
 
 EXCLUDED_REGIONS_CHANGED = "ExcludedRegionsChanged"
 
