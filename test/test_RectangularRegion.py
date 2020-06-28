@@ -22,7 +22,7 @@ class RectangularRegionTests(TestCase):
         self.assertEqual(unit.y1, 0, "y1 should be 0")
         self.assertEqual(unit.x2, 0, "x2 should be 0")
         self.assertEqual(unit.y2, 0, "y2 should be 0")
-        self.assertRegexpMatches(unit.id, "^[-0-9a-fA-F]{36}$", "id should be a UUID string")
+        self.assertRegex(unit.id, "^[-0-9a-fA-F]{36}$", "id should be a UUID string")
         self.assertProperties(unit, RectangularRegionTests.expectedProperties)
 
     def test_constructor_kwargs(self):

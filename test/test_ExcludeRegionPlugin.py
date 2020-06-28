@@ -23,7 +23,7 @@ from .utils import TestCase
 # Initialize the OctoPrint settings to defaults.
 # This specifies a directory under the build folder here so it doesn't find a pre-existing
 # configuration yaml file that it pulls unexpected settings from.
-octoprintSettings(init=True, basedir=os.path.abspath(os.path.join("build", "test-workspace")))
+octoprintSettings(init=True, basedir=os.path.abspath(os.path.join(os.environ.get("BUILD_PY_DIR"), "test-workspace")))
 
 
 def create_plugin_instance():

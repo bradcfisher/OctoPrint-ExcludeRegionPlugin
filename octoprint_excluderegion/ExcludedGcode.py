@@ -1,7 +1,7 @@
 # coding=utf-8
 """Module providing the ExcludedGcode class."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 from .CommonMixin import CommonMixin
 
 # Filter out the command when in an exclude region and do not send it to the printer.

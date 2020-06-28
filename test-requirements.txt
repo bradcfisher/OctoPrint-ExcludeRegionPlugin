@@ -8,4 +8,3 @@ sphinx
 configparser
 pylint
 pylama
-https://get.octoprint.org/latest
