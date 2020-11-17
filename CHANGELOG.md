@@ -1,5 +1,5 @@
 
-## [0.3.0] - UNRELEASED
+## [0.3.0] - 2020/11/17
 
 The primary focus of this release is ensuring Python 3 compatibility.  There are also a couple of
 behavior changes and a notable bugfix relating to reraction processing within an excluded region.
