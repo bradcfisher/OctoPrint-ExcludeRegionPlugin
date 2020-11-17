@@ -1,7 +1,7 @@
 # coding=utf-8
 """Module providing the CircularRegion class."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import uuid
 import math

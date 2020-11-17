@@ -1,0 +1,12 @@
+# Packages required for running tests, coverage or linting under Python 2
+
+pip
+coverage==5.1
+mock==3.0.5
+callee==0.3.1
+sphinx==1.8.5
+configparser==4.0.2
+pylint==1.9.5
+pylama==7.7.1
+Pygments==2.5.2
+sphinxcontrib_websupport==1.1.2

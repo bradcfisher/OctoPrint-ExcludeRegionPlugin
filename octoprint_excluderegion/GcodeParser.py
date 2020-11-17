@@ -1,6 +1,8 @@
 # coding=utf-8
 """Class for parsing lines of Gcode from a string."""
 
+from __future__ import absolute_import, division
+
 import re
 from collections import OrderedDict
 
@@ -537,7 +539,7 @@ class GcodeParser(CommonMixin):  # pylint: disable=too-many-instance-attributes
             The computed checksum.
         """
         checksum = 0
-        for byte in bytearray(value):
+        for byte in bytearray(value.encode('utf-8')):
             checksum ^= byte
         return checksum
 

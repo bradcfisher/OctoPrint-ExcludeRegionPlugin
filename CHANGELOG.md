@@ -1,6 +1,21 @@
 
-## [0.2.1] - UNRELEASED
+## [0.3.0] - UNRELEASED
 
+The primary focus of this release is ensuring Python 3 compatibility.  There are also a couple of
+behavior changes and a notable bugfix relating to reraction processing within an excluded region.
+
+### Fixed
+
+- Updated retraction processing within an excluded region to accommodate for how Slic3r generates
+  retraction GCode when either wiping or retract on layer change are enabled.
+  > Resolves [#21](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/21)
+
+### Changed
+
+- Updated codebase for Python 3 compatibility
+  > Resolves [#32](https://github.com/bradcfisher/OctoPrint-ExcludeRegionPlugin/issues/32)
+- Only the last M117 gcode command encountered is processed by default while excluding
+- M73 gcode commands are now merged by default while excluding
 
 
 ## [0.2.0] - 2019-08-25

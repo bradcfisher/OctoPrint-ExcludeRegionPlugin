@@ -30,7 +30,7 @@
 #   current_position[Z_AXIS] -=
 #       hotend_offset[Z_AXIS][active_extruder] - hotend_offset[Z_AXIS][tmp_extruder];
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import logging
 import re
@@ -642,10 +642,10 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
     def _handleSettingsUpdated(self):
         """Update internal state when a settings change is detected."""
         self.clearRegionsAfterPrintFinishes = \
-            self._settings.getBoolean(["clearRegionsAfterPrintFinishes"])
+            self._settings.get_boolean(["clearRegionsAfterPrintFinishes"])
 
         self.mayShrinkRegionsWhilePrinting = \
-            self._settings.getBoolean(["mayShrinkRegionsWhilePrinting"])
+            self._settings.get_boolean(["mayShrinkRegionsWhilePrinting"])
 
         self.state.g90InfluencesExtruder = \
             settings().getBoolean(["feature", "g90InfluencesExtruder"])

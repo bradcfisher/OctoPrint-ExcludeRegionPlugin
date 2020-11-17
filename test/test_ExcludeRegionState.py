@@ -1,7 +1,7 @@
 # coding=utf-8
 """Unit tests for the more advanced functionality of the ExcludeRegionState class."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 from collections import OrderedDict
 
 import time
@@ -661,7 +661,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         """Test _processPendingCommands if pending commands exist and no exit script."""
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
-        unit.pendingCommands["G1"] = {"X": 1, "Y": 2}      # Ensure dict is processed correctly
+        unit.pendingCommands["G1"] = {"X": 1.0, "Y": 2.0}      # Ensure dict is processed correctly
         unit.pendingCommands["G11"] = "G11 S1"             # Ensure string is processed correctly
         unit.exitingExcludedRegionGcode = None
 
@@ -676,8 +676,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             result,
             [
                 AnyIn([
-                    "G1 X1 Y2",
-                    "G1 Y2 X1"
+                    "G1 X%s Y%s" % (1.0, 2.0),
+                    "G1 Y%s X%s" % (2.0, 1.0)
                 ]),
                 "G11 S1"
             ],
@@ -688,7 +688,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         """Test _processPendingCommands if pending commands exist and exit script is provided."""
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
-        unit.pendingCommands["G1"] = {"X": 1, "Y": 2}      # Ensure dict is processed correctly
+        unit.pendingCommands["G1"] = {"X": 1.0, "Y": 2.0}      # Ensure dict is processed correctly
         unit.pendingCommands["G11"] = "G11 S1"             # Ensure string is processed correctly
 
         unit.exitingExcludedRegionGcode = ["exitCommand"]
@@ -704,8 +704,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             result,
             [
                 AnyIn([
-                    "G1 X1 Y2",
-                    "G1 Y2 X1"
+                    "G1 X%s Y%s" % (1.0, 2.0),
+                    "G1 Y%s X%s" % (2.0, 1.0)
                 ]),
                 "G11 S1",
                 "exitCommand"
@@ -775,8 +775,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
 
         unit.excluding = True
         unit.excludeStartTime = time.time()
-        unit.feedRate = 1000
-        unit.feedRateUnitMultiplier = 1
+        unit.feedRate = 1000.0
+        unit.feedRateUnitMultiplier = 1.0
         unit.lastPosition = create_position(x=1, y=2, z=3, extruderPosition=4)
         unit.position = create_position(x=10, y=20, z=3, extruderPosition=40)
 
@@ -790,8 +790,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 result,
                 [
                     "pendingCommand",
-                    "G92 E40",
-                    "G0 F1000 X10 Y20"
+                    "G92 E{e}".format(e=40.0),
+                    "G0 F{f} X{x} Y{y}".format(f=1000.0, x=10.0, y=20.0)
                 ],
                 "The result should be a list of the expected commands."
             )
@@ -819,9 +819,9 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 result,
                 [
                     "pendingCommand",
-                    "G92 E40",
-                    "G0 F1000 X10 Y20",
-                    "G0 F1000 Z3"
+                    "G92 E%s" % (40.0),
+                    "G0 F%s X%s Y%s" % (1000.0, 10.0, 20.0),
+                    "G0 F%s Z%s" % (1000.0, 3.0)
                 ],
                 "The result should be a list of the expected commands."
             )
@@ -849,9 +849,9 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 result,
                 [
                     "pendingCommand",
-                    "G92 E40",
-                    "G0 F1000 Z30",
-                    "G0 F1000 X10 Y20"
+                    "G92 E%s" % (40.0),
+                    "G0 F%s Z%s" % (1000.0, 30.0),
+                    "G0 F%s X%s Y%s" % (1000.0, 10.0, 20.0)
                 ],
                 "The result should be a list of the expected commands."
             )

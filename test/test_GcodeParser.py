@@ -956,10 +956,10 @@ class GcodeParserTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.buildCommand("G0", X=10, Y=20)
 
-        self.assertRegexpMatches(result, "^G0 ", "The returned command should start with 'G0 '")
+        self.assertRegex(result, "^G0 ", "The returned command should start with 'G0 '")
         # Due to kwargs, order of arguments is not guaranteed, and also is not required
-        self.assertRegexpMatches(result, " X10( |$)", "The returned command should contain ' X10'")
-        self.assertRegexpMatches(result, " Y20( |$)", "The returned command should contain ' Y20'")
+        self.assertRegex(result, " X10( |$)", "The returned command should contain ' X10'")
+        self.assertRegex(result, " Y20( |$)", "The returned command should contain ' Y20'")
 
     def test_buildCommand_argValueNone(self):
         """Test buildCommand when passed a GCode command and a kwarg set to None."""

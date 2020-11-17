@@ -42,8 +42,8 @@ class RetractionStateTests(TestCase):
         unit = RetractionState(
             originalCommand="SomeCommand",
             firmwareRetract=False,
-            extrusionAmount=1,
-            feedRate=100
+            extrusionAmount=1.0,
+            feedRate=100.0
         )
 
         self.assertIsInstance(unit, RetractionState)
@@ -64,7 +64,7 @@ class RetractionStateTests(TestCase):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=False,
-                feedRate=100
+                feedRate=100.0
             )
 
     def test_constructor_missing_feedRate(self):
@@ -73,7 +73,7 @@ class RetractionStateTests(TestCase):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=False,
-                extrusionAmount=1
+                extrusionAmount=1.0
             )
 
     def test_constructor_argumentConflict(self):
@@ -82,22 +82,22 @@ class RetractionStateTests(TestCase):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=True,
-                extrusionAmount=1
+                extrusionAmount=1.0
             )
 
         with self.assertRaises(ValueError):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=True,
-                feedRate=100
+                feedRate=100.0
             )
 
         with self.assertRaises(ValueError):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=True,
-                extrusionAmount=1,
-                feedRate=100
+                extrusionAmount=1.0,
+                feedRate=100.0
             )
 
     def test_generateRetractCommands_firmware_noParams(self):
@@ -129,14 +129,14 @@ class RetractionStateTests(TestCase):
         unit = RetractionState(
             originalCommand="G1 F100 E1",
             firmwareRetract=False,
-            extrusionAmount=1,
-            feedRate=100
+            extrusionAmount=1.0,
+            feedRate=100.0
         )
         position = Position()
 
         returnCommands = unit.generateRetractCommands(position)
         self.assertEqual(
-            returnCommands, ["G92 E1", "G1 F100 E0"],
+            returnCommands, ["G92 E%s" % (1.0), "G1 F%s E%s" % (100.0, 0.0)],
             "The returned list should be ['G92 E1', 'G1 F100 E0']"
         )
         self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
@@ -170,14 +170,14 @@ class RetractionStateTests(TestCase):
         unit = RetractionState(
             originalCommand="G1 F100 E1",
             firmwareRetract=False,
-            extrusionAmount=1,
-            feedRate=100
+            extrusionAmount=1.0,
+            feedRate=100.0
         )
         position = Position()
 
         returnCommands = unit.generateRecoverCommands(position)
         self.assertEqual(
-            returnCommands, ["G92 E-1", "G1 F100 E0"],
+            returnCommands, ["G92 E%s" % (-1.0), "G1 F%s E%s" % (100.0, 0.0)],
             "The returned list should be ['G92 E-1', 'G1 F100 E0']"
         )
         self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
@@ -210,15 +210,15 @@ class RetractionStateTests(TestCase):
         unit = RetractionState(
             originalCommand="G1 F100 E-1",
             firmwareRetract=False,
-            extrusionAmount=1,
-            feedRate=100
+            extrusionAmount=1.0,
+            feedRate=100.0
         )
 
         toCombine = RetractionState(
             originalCommand="G1 F200 E-0.5",
             firmwareRetract=False,
             extrusionAmount=0.5,
-            feedRate=200
+            feedRate=200.0
         )
 
         result = unit.combine(toCombine, mockLogger)
@@ -234,8 +234,8 @@ class RetractionStateTests(TestCase):
         unit = RetractionState(
             originalCommand="G1 F100 E-1",
             firmwareRetract=False,
-            extrusionAmount=1,
-            feedRate=100
+            extrusionAmount=1.0,
+            feedRate=100.0
         )
         unit.allowCombine = False
 
@@ -243,7 +243,7 @@ class RetractionStateTests(TestCase):
             originalCommand="G1 F200 E-0.5",
             firmwareRetract=False,
             extrusionAmount=0.5,
-            feedRate=200
+            feedRate=200.0
         )
 
         result = unit.combine(toCombine, mockLogger)
@@ -281,8 +281,8 @@ class RetractionStateTests(TestCase):
         unit = RetractionState(
             originalCommand="G1 F100 E-1",
             firmwareRetract=False,
-            extrusionAmount=1,
-            feedRate=100
+            extrusionAmount=1.0,
+            feedRate=100.0
         )
 
         toCombine = RetractionState(

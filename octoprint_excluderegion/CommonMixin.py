@@ -1,7 +1,7 @@
 # coding=utf-8
 """Module providing the CommonMixin class."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import json
 import re

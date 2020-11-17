@@ -1,7 +1,7 @@
 # coding=utf-8
 """Module providing the AxisPosition class."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 from .CommonMixin import CommonMixin
 
 # Possible enhancements:
@@ -32,10 +32,10 @@ class AxisPosition(CommonMixin):
     def __init__(
             self,
             current=None,
-            homeOffset=0,
-            offset=0,
+            homeOffset=0.0,
+            offset=0.0,
             absoluteMode=True,
-            unitMultiplier=1
+            unitMultiplier=1.0
     ):
         """
         Initialize the instance properties.
@@ -65,11 +65,11 @@ class AxisPosition(CommonMixin):
         else:
             # Current value and offsets are stored internally in mm
             self.current = current
-            self.homeOffset = homeOffset
-            self.offset = offset
+            self.homeOffset = float(homeOffset)
+            self.offset = float(offset)
             self.absoluteMode = absoluteMode
             # Conversion factor from logical units (e.g. inches) to mm
-            self.unitMultiplier = unitMultiplier
+            self.unitMultiplier = float(unitMultiplier)
 
     def setAbsoluteMode(self, absoluteMode=True):
         """
@@ -107,7 +107,7 @@ class AxisPosition(CommonMixin):
             The new home offset in logical units, relative to the physical bed origin.
         """
         oldHomeOffset = self.homeOffset
-        self.homeOffset = homeOffset * self.unitMultiplier
+        self.homeOffset = float(homeOffset) * self.unitMultiplier
         self.current += oldHomeOffset - self.homeOffset
 
     def setHome(self):
@@ -134,7 +134,7 @@ class AxisPosition(CommonMixin):
         unitMultiplier : float
             The new unit multiplier to use for converting between logical and native units.
         """
-        self.unitMultiplier = unitMultiplier
+        self.unitMultiplier = float(unitMultiplier)
 
     def setLogicalPosition(self, position):
         """

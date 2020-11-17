@@ -214,16 +214,16 @@ def create_position(x=None, y=None, z=None, extruderPosition=0, unitMultiplier=1
     position = Position()
 
     if (x is not None):
-        position.X_AXIS.current = x
+        position.X_AXIS.current = float(x)
 
     if (y is not None):
-        position.Y_AXIS.current = y
+        position.Y_AXIS.current = float(y)
 
     if (z is not None):
-        position.Z_AXIS.current = z
+        position.Z_AXIS.current = float(z)
 
     if (extruderPosition is not None):
-        position.E_AXIS.current = extruderPosition
+        position.E_AXIS.current = float(extruderPosition)
 
     if (unitMultiplier is not None):
         position.setUnitMultiplier(unitMultiplier)
@@ -236,11 +236,29 @@ def create_position(x=None, y=None, z=None, extruderPosition=0, unitMultiplier=1
 
 DEPRECATED_METHODS = [
     "assertEquals", "failIfEqual", "failUnless", "assert_",
-    "failIf", "failUnlessRaises", "failUnlessAlmostEqual", "failIfAlmostEqual"
+    "failIf", "failUnlessRaises", "failUnlessAlmostEqual", "failIfAlmostEqual",
+    "assertRegexpMatches", "assertNotRegexpMatches"
 ]
 
 
 def _apply_deprecation_closures():
+    # Ensures consistency between python 2 & 3 unittest by defining assertRegex and
+    # assertNotRegex if they don't exist
+    if (not hasattr(TestCase, "assertRegex")):
+        setattr(
+            TestCase,
+            "assertRegex",
+            getattr(TestCase, "assertRegexpMatches")
+        )
+
+    if (not hasattr(TestCase, "assertNotRegex")):
+        setattr(
+            TestCase,
+            "assertNotRegex",
+            getattr(TestCase, "assertNotRegexpMatches")
+        )
+
+    # Wrap methods that shouldn't be called to emit deprecation warnings
     def _create_deprecation_closure(deprecatedMethod, origFn):
         def deprecation_closure(self, *args, **kwargs):
             warnings.warn(
