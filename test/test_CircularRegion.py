@@ -22,7 +22,7 @@ class CircularRegionTests(TestCase):
         self.assertEqual(unit.cx, 0, "cx should be 0")
         self.assertEqual(unit.cy, 0, "cy should be 0")
         self.assertEqual(unit.r, 0, "r should be 0")
-        self.assertRegexpMatches(unit.id, "^[-0-9a-fA-F]{36}$", "id should be a UUID string")
+        self.assertRegex(unit.id, "^[-0-9a-fA-F]{36}$", "id should be a UUID string")
         self.assertProperties(unit, CircularRegionTests.expectedProperties)
 
     def test_constructor_kwargs(self):

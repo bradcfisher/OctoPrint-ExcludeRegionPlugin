@@ -1,7 +1,7 @@
 # coding=utf-8
 """Unit tests for the more advanced functionality of the ExcludeRegionState class."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 from collections import OrderedDict
 
 import time
@@ -118,8 +118,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 "The result should be an empty list."
             )
 
-    def test_recordRetraction_noRecoverExcluded_excluding(self):
-        """Test recordRetraction with recoverExcluded=False and excluding."""
+    def test_recordRetraction_noRecoverExcluded_allowCombine_excluding(self):
+        """Test recordRetraction with recoverExcluded=False, allowCombine=True and excluding."""
         expectedReturnCommands = ["addedCommand"]
 
         mockRetractionState = mock.Mock()
@@ -129,17 +129,58 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         unit = ExcludeRegionState(mockLogger)
         with mock.patch.object(unit, 'lastRetraction'):
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
             unit.excluding = True
 
             returnCommands = unit.recordRetraction(mockRetractionState)
 
+            unit.lastRetraction.combine.assert_called_with(mockRetractionState, mockLogger)
             mockRetractionState.generateRetractCommands.assert_called_with(unit.position)
             self.assertEqual(
                 returnCommands, expectedReturnCommands,
                 "The result from generateRetractCommands should be returned."
             )
 
-    def test_recordRetraction_noRecoverExcluded_notExcluding(self):
+    def test_recordRetraction_noRecoverExcluded_allowCombine_notExcluding(self):
+        """Test recordRetraction with recoverExcluded=False, allowCombine=True and not excluding."""
+        expectedReturnCommands = ["retractionCommand"]
+
+        mockRetractionState = mock.Mock()
+        mockRetractionState.originalCommand = "retractionCommand"
+
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        with mock.patch.object(unit, 'lastRetraction'):
+            unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
+            unit.excluding = False
+
+            returnCommands = unit.recordRetraction(mockRetractionState)
+
+            self.assertEqual(
+                returnCommands, expectedReturnCommands,
+                "The original command should be returned"
+            )
+
+    def test_recordRetraction_noRecoverExcluded_noCombine_excluding(self):
+        """Test recordRetraction with recoverExcluded=False and excluding."""
+        mockRetractionState = mock.Mock()
+
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        with mock.patch.object(unit, 'lastRetraction'):
+            unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = False
+            unit.excluding = True
+
+            returnCommands = unit.recordRetraction(mockRetractionState)
+
+            self.assertEqual(
+                returnCommands, [],
+                "The result should be an empty list."
+            )
+
+    def test_recordRetraction_noRecoverExcluded_noCombine_notExcluding(self):
         """Test recordRetraction with recoverExcluded=False and not excluding."""
         mockRetractionState = mock.Mock()
         mockRetractionState.originalCommand = "retractionCommand"
@@ -148,6 +189,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         unit = ExcludeRegionState(mockLogger)
         with mock.patch.object(unit, 'lastRetraction'):
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = False
             unit.excluding = False
 
             returnCommands = unit.recordRetraction(mockRetractionState)
@@ -155,7 +197,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             mockRetractionState.generateRetractCommands.assert_not_called()
             self.assertEqual(
                 returnCommands, ["retractionCommand"],
-                "The original retraction command should be appended to the command list passed in."
+                "The original command should be returned"
             )
 
     def test_recoverRetraction_recoverExcluded(self):
@@ -202,6 +244,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         ) as mocks:
             unit.excluding = True
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
 
             result = unit.recoverRetractionIfNeeded("G11", True)
 
@@ -216,6 +259,10 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             self.assertTrue(
                 unit.lastRetraction.recoverExcluded,
                 "recoverExcluded should be set to True"
+            )
+            self.assertFalse(
+                unit.lastRetraction.allowCombine,
+                "allowCombine should be set to False"
             )
             self.assertEqual(
                 result, [],
@@ -233,6 +280,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         ) as mocks:
             unit.excluding = True
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
 
             result = unit.recoverRetractionIfNeeded("G1 X1 Y2 E3", False)
 
@@ -243,6 +291,10 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             self.assertEqual(
                 unit.lastRetraction, mocks["lastRetraction"],
                 "The lastRetraction should not be updated"
+            )
+            self.assertFalse(
+                unit.lastRetraction.allowCombine,
+                "allowCombine should be set to False"
             )
             self.assertFalse(
                 unit.lastRetraction.recoverExcluded,
@@ -264,6 +316,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         ) as mocks:
             unit.excluding = False
             unit.lastRetraction.recoverExcluded = False
+            unit.lastRetraction.allowCombine = True
             mocks["_recoverRetraction"].return_value = ["expectedCommand"]
 
             result = unit.recoverRetractionIfNeeded("G11", True)
@@ -272,6 +325,10 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             self.assertEqual(
                 unit.lastRetraction, mocks["lastRetraction"],
                 "The lastRetraction should not be updated"
+            )
+            self.assertFalse(
+                unit.lastRetraction.allowCombine,
+                "allowCombine should be set to False"
             )
             self.assertFalse(
                 unit.lastRetraction.recoverExcluded,
@@ -418,6 +475,91 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 "The result should be a list containing the command"
             )
 
+    def test_processExcludedMove_excluding_retract(self):
+        """Test _processExcludedMove with a retraction while moving and excluding=True."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        unit.excluding = True
+
+        with mock.patch.multiple(
+            unit,
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
+        ) as mocks:
+            mocks["_processNonMove"].return_value = ["processNonMove"]
+
+            result = unit._processExcludedMove("G1 X10 Y20", -1)  # pylint: disable=protected-access
+
+            mocks["enterExcludedRegion"].assert_not_called()
+            mocks["_processNonMove"].assert_called_with("G1 X10 Y20", -1)
+            self.assertEqual(
+                result, ["processNonMove"],
+                "The result should be the commands returned by _processNonMove"
+            )
+
+    def test_processExcludedMove_excluding_nonRetract(self):
+        """Test _processExcludedMove with a non-retraction move and excluding=True."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        unit.excluding = True
+
+        with mock.patch.multiple(
+            unit,
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
+        ) as mocks:
+            result = unit._processExcludedMove("G1 X10 Y20", 0)  # pylint: disable=protected-access
+
+            mocks["enterExcludedRegion"].assert_not_called()
+            mocks["_processNonMove"].assert_not_called()
+            self.assertEqual(result, [], "The result should be an empty list")
+
+    def test_processExcludedMove_notExcluding_retract(self):
+        """Test _processExcludedMove with a retraction while moving and excluding=False."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        unit.excluding = False
+
+        with mock.patch.multiple(
+            unit,
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
+        ) as mocks:
+            mocks["enterExcludedRegion"].return_value = ["enterExcludedRegion"]
+            mocks["_processNonMove"].return_value = ["processNonMove"]
+
+            result = unit._processExcludedMove("G1 X10 Y20", -1)  # pylint: disable=protected-access
+
+            mocks["enterExcludedRegion"].assert_called_with("G1 X10 Y20")
+            mocks["_processNonMove"].assert_called_with("G1 X10 Y20", -1)
+            self.assertEqual(
+                result, ["enterExcludedRegion", "processNonMove"],
+                "The result should contain the expected commands"
+            )
+
+    def test_processExcludedMove_notExcluding_nonRetract(self):
+        """Test _processExcludedMove with a non-retraction move and excluding=False."""
+        mockLogger = mock.Mock()
+        unit = ExcludeRegionState(mockLogger)
+        unit.excluding = False
+
+        with mock.patch.multiple(
+            unit,
+            enterExcludedRegion=mock.DEFAULT,
+            _processNonMove=mock.DEFAULT
+        ) as mocks:
+            mocks["enterExcludedRegion"].return_value = ["enterExcludedRegion"]
+
+            result = unit._processExcludedMove("G1 X10 Y20", 0)  # pylint: disable=protected-access
+
+            mocks["enterExcludedRegion"].assert_called_with("G1 X10 Y20")
+            mocks["_processNonMove"].assert_not_called()
+            self.assertEqual(
+                result,
+                ["enterExcludedRegion"],
+                "The result should be the commands returned by enterExcludedRegion"
+            )
+
     def test_enterExcludedRegion_exclusionDisabled(self):
         """Test enterExcludedRegion when exclusion is disabled should raise an AssertionError."""
         mockLogger = mock.Mock()
@@ -427,8 +569,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         with self.assertRaises(AssertionError):
             unit.enterExcludedRegion("G1 X1 Y2")
 
-    def test_exitExcludedRegion_excluding(self):
-        """Test exitExcludedRegion when already excluding."""
+    def test_enterExcludedRegion_excluding(self):
+        """Test enterExcludedRegion when already excluding."""
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
 
@@ -519,7 +661,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         """Test _processPendingCommands if pending commands exist and no exit script."""
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
-        unit.pendingCommands["G1"] = {"X": 1, "Y": 2}      # Ensure dict is processed correctly
+        unit.pendingCommands["G1"] = {"X": 1.0, "Y": 2.0}      # Ensure dict is processed correctly
         unit.pendingCommands["G11"] = "G11 S1"             # Ensure string is processed correctly
         unit.exitingExcludedRegionGcode = None
 
@@ -534,8 +676,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             result,
             [
                 AnyIn([
-                    "G1 X1 Y2",
-                    "G1 Y2 X1"
+                    "G1 X%s Y%s" % (1.0, 2.0),
+                    "G1 Y%s X%s" % (2.0, 1.0)
                 ]),
                 "G11 S1"
             ],
@@ -546,7 +688,7 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
         """Test _processPendingCommands if pending commands exist and exit script is provided."""
         mockLogger = mock.Mock()
         unit = ExcludeRegionState(mockLogger)
-        unit.pendingCommands["G1"] = {"X": 1, "Y": 2}      # Ensure dict is processed correctly
+        unit.pendingCommands["G1"] = {"X": 1.0, "Y": 2.0}      # Ensure dict is processed correctly
         unit.pendingCommands["G11"] = "G11 S1"             # Ensure string is processed correctly
 
         unit.exitingExcludedRegionGcode = ["exitCommand"]
@@ -562,8 +704,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
             result,
             [
                 AnyIn([
-                    "G1 X1 Y2",
-                    "G1 Y2 X1"
+                    "G1 X%s Y%s" % (1.0, 2.0),
+                    "G1 Y%s X%s" % (2.0, 1.0)
                 ]),
                 "G11 S1",
                 "exitCommand"
@@ -633,8 +775,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
 
         unit.excluding = True
         unit.excludeStartTime = time.time()
-        unit.feedRate = 1000
-        unit.feedRateUnitMultiplier = 1
+        unit.feedRate = 1000.0
+        unit.feedRateUnitMultiplier = 1.0
         unit.lastPosition = create_position(x=1, y=2, z=3, extruderPosition=4)
         unit.position = create_position(x=10, y=20, z=3, extruderPosition=40)
 
@@ -648,8 +790,8 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 result,
                 [
                     "pendingCommand",
-                    "G92 E40",
-                    "G0 F1000 X10 Y20"
+                    "G92 E{e}".format(e=40.0),
+                    "G0 F{f} X{x} Y{y}".format(f=1000.0, x=10.0, y=20.0)
                 ],
                 "The result should be a list of the expected commands."
             )
@@ -677,9 +819,9 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 result,
                 [
                     "pendingCommand",
-                    "G92 E40",
-                    "G0 F1000 X10 Y20",
-                    "G0 F1000 Z3"
+                    "G92 E%s" % (40.0),
+                    "G0 F%s X%s Y%s" % (1000.0, 10.0, 20.0),
+                    "G0 F%s Z%s" % (1000.0, 3.0)
                 ],
                 "The result should be a list of the expected commands."
             )
@@ -707,9 +849,9 @@ class ExcludeRegionStateTests(TestCase):  # pylint: disable=too-many-public-meth
                 result,
                 [
                     "pendingCommand",
-                    "G92 E40",
-                    "G0 F1000 Z30",
-                    "G0 F1000 X10 Y20"
+                    "G92 E%s" % (40.0),
+                    "G0 F%s Z%s" % (1000.0, 30.0),
+                    "G0 F%s X%s Y%s" % (1000.0, 10.0, 20.0)
                 ],
                 "The result should be a list of the expected commands."
             )

@@ -137,7 +137,7 @@ class GcodeHandlersGeometryTests(TestCase):
         for point in self._planArcResultIterator(items):
             value = point[coordinateOffset]
 
-            direction = cmp(value, prevValue)
+            direction = -1 if value < prevValue else 0 if value == prevValue else 1
             self.assertFalse(direction == 0, "The direction should never be 0: index=%s" % index)
             if (direction != prevDirection):
                 numReversals += 1

@@ -1,4 +1,5 @@
 
+# python2 or python3
 PYTHON=python2
 
 SOURCE_DIR=octoprint_excluderegion
@@ -10,18 +11,20 @@ DOC_FILES=$(shell find doc -type f)
 
 BUILD_DIR=build
 
-TESTENV=$(BUILD_DIR)/testenv
+BUILD_PY_DIR=$(BUILD_DIR)/$(notdir $(PYTHON))
 
-COMMON_DEPS_INSTALLED=$(BUILD_DIR)/.common-dependencies-installed
-TESTENV_DEPS_INSTALLED=$(BUILD_DIR)/.testenv-dependencies-installed
-SERVE_DEPS_INSTALLED=$(BUILD_DIR)/.serve-dependencies-installed
+TESTENV=$(BUILD_PY_DIR)/testenv
 
-ACTIVATE_TESTENV=$(TESTENV)/bin/activate
-COVERAGE_DIR=$(BUILD_DIR)/coverage
+COMMON_DEPS_INSTALLED=$(BUILD_PY_DIR)/.common-dependencies-installed
+TESTENV_DEPS_INSTALLED=$(BUILD_PY_DIR)/.testenv-dependencies-installed
+SERVE_DEPS_INSTALLED=$(BUILD_PY_DIR)/.serve-dependencies-installed
+
+ACTIVATE_TESTENV=$(TESTENV)/bin/activate && export BUILD_PY_DIR=$(BUILD_PY_DIR)
+COVERAGE_DIR=$(BUILD_PY_DIR)/coverage
 COVERAGE_FILE=$(COVERAGE_DIR)/coverage.dat
 COVERAGE_PATTERN_FILE=$(COVERAGE_DIR)/last-coverage-pattern
 
-PIP_CACHE_ARGS=--cache-dir $(BUILD_DIR)/pip_cache
+PIP_CACHE_ARGS=--cache-dir $(BUILD_DIR)/pip_cache/$(notdir $(PYTHON))
 PIP=pip
 
 TEST_PATTERN=$(or $(PATTERN),test*.py)
@@ -30,13 +33,28 @@ LINT_SOURCE_FILES=$(if $(filter undefined,$(origin PATTERN)),$(SOURCE_DIR),$(she
 LINT_TEST_FILES=$(if $(filter undefined,$(origin PATTERN)),$(TEST_DIR),$(shell find $(TEST_DIR) -type f -name "$(PATTERN)"))
 
 # Configuration for the `serve` target.
+# Version of OctoPrint to run under ("latest" for current or release number (e.g. "1.3.12") for specific release)
+OCTOPRINT_VERSION=latest
 OCTOPRINT_CONFIG_DIR=~/.octoprint2
 OCTOPRINT_PORT=5001
 
+ifeq ($(OCTOPRINT_VERSION),latest)
+  OCTOPRINT_URL=https://get.octoprint.org/latest
+else
+  OCTOPRINT_URL=https://github.com/foosel/OctoPrint/archive/$(OCTOPRINT_VERSION).zip
+endif
+
+ifeq ($(PYTHON),python2)
+  TEST_REQUIREMENTS=test-py2-requirements.txt
+else
+  TEST_REQUIREMENTS=test-requirements.txt
+endif
+
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
-	@echo "  clean                 Remove build, test and documentation artifacts"
-	@echo "  serve                 Launch OctoPrint server (port=$(OCTOPRINT_PORT), config dir=$(OCTOPRINT_CONFIG_DIR))"
+	@echo "  clean                 Remove build, test and documentation artifacts for the current version of Python"
+	@echo "  clean-all             Remove all cache, build, test and documentation artifacts"
+	@echo "  serve                 Launch OctoPrint server (version=$(OCTOPRINT_VERSION), port=$(OCTOPRINT_PORT), config dir=$(OCTOPRINT_CONFIG_DIR))"
 	@echo "  test                  Run tests"
 	@echo "  coverage              Run code coverage"
 	@echo "  coverage-report       Generate code coverage reports"
@@ -53,13 +71,15 @@ help:
 	@echo
 
 $(TESTENV):
-	$(PYTHON) -m virtualenv $(TESTENV)
+	$(PYTHON) -m virtualenv --python=$(PYTHON) $(TESTENV)
 	. $(ACTIVATE_TESTENV) \
 		&& $(PIP) install --upgrade pip
 
 $(COMMON_DEPS_INSTALLED): $(TESTENV)
+  # Should be able to remove --no-use-pep517 once pip/setuptools fix the bootstrapping errors caused by PEP 517 in pip >= 19.0 (https://github.com/pypa/setuptools/issues/1644)
 	. $(ACTIVATE_TESTENV) \
-		&& $(PIP) $(PIP_CACHE_ARGS) install --upgrade -r test-requirements.txt \
+		&& $(PIP) $(PIP_CACHE_ARGS) install --upgrade -r $(TEST_REQUIREMENTS) --no-use-pep517 \
+		&& $(PIP) $(PIP_CACHE_ARGS) install --upgrade $(OCTOPRINT_URL) --no-use-pep517 \
 		&& $(PIP) $(PIP_CACHE_ARGS) install -e .
 	touch $(COMMON_DEPS_INSTALLED)
 
@@ -96,6 +116,10 @@ serve: $(SERVE_DEPS_INSTALLED) $(SOURCE_FILES) $(TEST_FILES)
 
 clean:
 	-rm -f *.pyc $(SOURCE_DIR)/*.pyc $(TEST_DIR)/*.pyc
+	-rm -rf $(SOURCE_DIR)/__pycache__ $(TEST_DIR)/__pycache__
+	-rm -rf $(BUILD_PY_DIR)
+
+clean-all: clean
 	-rm -rf $(BUILD_DIR)
 
 # If the PATTERN is different than the last coverage run, removes the coverage data file
@@ -147,4 +171,4 @@ else
 	@echo "lint-tests: No test files match specified pattern"
 endif
 
-.PHONY: help clean test serve clear-deps-installed refresh-dependencies coverage coverage-report clean-coverage-report check-coverage-pattern doc lint lint-source lint-tests
+.PHONY: help clean clean-all test serve clear-deps-installed refresh-dependencies coverage coverage-report clean-coverage-report check-coverage-pattern doc lint lint-source lint-tests

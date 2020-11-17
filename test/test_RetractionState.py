@@ -3,6 +3,8 @@
 
 from __future__ import absolute_import
 
+import mock
+
 from octoprint_excluderegion.RetractionState import RetractionState
 from octoprint_excluderegion.Position import Position
 from .utils import TestCase
@@ -12,7 +14,8 @@ class RetractionStateTests(TestCase):
     """Unit tests for the RetractionState class."""
 
     expectedProperties = [
-        "recoverExcluded", "firmwareRetract", "extrusionAmount", "feedRate", "originalCommand"
+        "recoverExcluded", "allowCombine", "firmwareRetract", "extrusionAmount",
+        "feedRate", "originalCommand"
     ]
 
     def test_constructor_firmwareRetraction(self):
@@ -24,6 +27,7 @@ class RetractionStateTests(TestCase):
 
         self.assertIsInstance(unit, RetractionState)
         self.assertFalse(unit.recoverExcluded, "recoverExcluded should be False")
+        self.assertTrue(unit.allowCombine, "allowCombine should be True")
         self.assertTrue(unit.firmwareRetract, "firmwareRetract should be True")
         self.assertIsNone(unit.extrusionAmount, "extrusionAmount should be None")
         self.assertIsNone(unit.feedRate, "feedRate should be None")
@@ -38,12 +42,13 @@ class RetractionStateTests(TestCase):
         unit = RetractionState(
             originalCommand="SomeCommand",
             firmwareRetract=False,
-            extrusionAmount=1,
-            feedRate=100
+            extrusionAmount=1.0,
+            feedRate=100.0
         )
 
         self.assertIsInstance(unit, RetractionState)
         self.assertFalse(unit.recoverExcluded, "recoverExcluded should be False")
+        self.assertTrue(unit.allowCombine, "allowCombine should be True")
         self.assertFalse(unit.firmwareRetract, "firmwareRetract should be None")
         self.assertEqual(unit.extrusionAmount, 1, "extrusionAmount should be 1")
         self.assertEqual(unit.feedRate, 100, "feedRate should be 100")
@@ -59,7 +64,7 @@ class RetractionStateTests(TestCase):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=False,
-                feedRate=100
+                feedRate=100.0
             )
 
     def test_constructor_missing_feedRate(self):
@@ -68,7 +73,7 @@ class RetractionStateTests(TestCase):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=False,
-                extrusionAmount=1
+                extrusionAmount=1.0
             )
 
     def test_constructor_argumentConflict(self):
@@ -77,22 +82,22 @@ class RetractionStateTests(TestCase):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=True,
-                extrusionAmount=1
+                extrusionAmount=1.0
             )
 
         with self.assertRaises(ValueError):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=True,
-                feedRate=100
+                feedRate=100.0
             )
 
         with self.assertRaises(ValueError):
             RetractionState(
                 originalCommand="SomeCommand",
                 firmwareRetract=True,
-                extrusionAmount=1,
-                feedRate=100
+                extrusionAmount=1.0,
+                feedRate=100.0
             )
 
     def test_generateRetractCommands_firmware_noParams(self):
@@ -124,14 +129,14 @@ class RetractionStateTests(TestCase):
         unit = RetractionState(
             originalCommand="G1 F100 E1",
             firmwareRetract=False,
-            extrusionAmount=1,
-            feedRate=100
+            extrusionAmount=1.0,
+            feedRate=100.0
         )
         position = Position()
 
         returnCommands = unit.generateRetractCommands(position)
         self.assertEqual(
-            returnCommands, ["G92 E1", "G1 F100 E0"],
+            returnCommands, ["G92 E%s" % (1.0), "G1 F%s E%s" % (100.0, 0.0)],
             "The returned list should be ['G92 E1', 'G1 F100 E0']"
         )
         self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
@@ -165,14 +170,128 @@ class RetractionStateTests(TestCase):
         unit = RetractionState(
             originalCommand="G1 F100 E1",
             firmwareRetract=False,
-            extrusionAmount=1,
-            feedRate=100
+            extrusionAmount=1.0,
+            feedRate=100.0
         )
         position = Position()
 
         returnCommands = unit.generateRecoverCommands(position)
         self.assertEqual(
-            returnCommands, ["G92 E-1", "G1 F100 E0"],
+            returnCommands, ["G92 E%s" % (-1.0), "G1 F%s E%s" % (100.0, 0.0)],
             "The returned list should be ['G92 E-1', 'G1 F100 E0']"
         )
         self.assertEqual(position.E_AXIS.current, 0, "The extruder axis should not be modified")
+
+    def test_combine_combineAllowed_firmware(self):
+        """Test the combine method with two firmware retractions when combine is allowed."""
+        mockLogger = mock.Mock()
+
+        unit = RetractionState(
+            originalCommand="G10 S1",
+            firmwareRetract=True
+        )
+
+        toCombine = RetractionState(
+            originalCommand="G10 S1",
+            firmwareRetract=True
+        )
+
+        result = unit.combine(toCombine, mockLogger)
+
+        self.assertIs(result, unit, "The return value should be the unit instance")
+        self.assertIsNone(unit.extrusionAmount, "extrusionAmount should be None")
+        self.assertTrue(unit.firmwareRetract, "firmwareRetract should be True")
+        mockLogger.warn.assert_not_called()
+
+    def test_combine_combineAllowed_nonFirmware(self):
+        """Test the combine method with two non-firmware retractions when combine is allowed."""
+        mockLogger = mock.Mock()
+
+        unit = RetractionState(
+            originalCommand="G1 F100 E-1",
+            firmwareRetract=False,
+            extrusionAmount=1.0,
+            feedRate=100.0
+        )
+
+        toCombine = RetractionState(
+            originalCommand="G1 F200 E-0.5",
+            firmwareRetract=False,
+            extrusionAmount=0.5,
+            feedRate=200.0
+        )
+
+        result = unit.combine(toCombine, mockLogger)
+
+        self.assertIs(result, unit, "The return value should be the unit instance")
+        self.assertEqual(unit.extrusionAmount, 1.5, "The extrusionAmount should be updated to 1.5")
+        mockLogger.warn.assert_not_called()
+
+    def test_combine_combineNotAllowed_nonFirmware(self):
+        """Test the combine method with two non-firmware retractions when combine is not allowed."""
+        mockLogger = mock.Mock()
+
+        unit = RetractionState(
+            originalCommand="G1 F100 E-1",
+            firmwareRetract=False,
+            extrusionAmount=1.0,
+            feedRate=100.0
+        )
+        unit.allowCombine = False
+
+        toCombine = RetractionState(
+            originalCommand="G1 F200 E-0.5",
+            firmwareRetract=False,
+            extrusionAmount=0.5,
+            feedRate=200.0
+        )
+
+        result = unit.combine(toCombine, mockLogger)
+
+        self.assertIs(result, unit, "The return value should be the unit instance")
+        self.assertEqual(unit.extrusionAmount, 1, "The extrusionAmount should not be modified")
+        mockLogger.warn.assert_called()
+
+    def test_combine_combineNotAllowed_firmware(self):
+        """Test the combine method with two firmware retractions when combine is not allowed."""
+        mockLogger = mock.Mock()
+
+        unit = RetractionState(
+            originalCommand="G10 S1",
+            firmwareRetract=True
+        )
+        unit.allowCombine = False
+
+        toCombine = RetractionState(
+            originalCommand="G10 S1",
+            firmwareRetract=True
+        )
+
+        result = unit.combine(toCombine, mockLogger)
+
+        self.assertIs(result, unit, "The return value should be the unit instance")
+        self.assertTrue(unit.firmwareRetract, "firmwareRetract should be True")
+        self.assertIsNone(unit.extrusionAmount, "The extrusionAmount should not be modified")
+        mockLogger.warn.assert_called()
+
+    def test_combine_mixedTypes(self):
+        """Test the combine method with a non-firmware and firmware retraction."""
+        mockLogger = mock.Mock()
+
+        unit = RetractionState(
+            originalCommand="G1 F100 E-1",
+            firmwareRetract=False,
+            extrusionAmount=1.0,
+            feedRate=100.0
+        )
+
+        toCombine = RetractionState(
+            originalCommand="G10 S1",
+            firmwareRetract=True
+        )
+
+        result = unit.combine(toCombine, mockLogger)
+
+        self.assertIs(result, unit, "The return value should be the unit instance")
+        self.assertEqual(unit.extrusionAmount, 1, "The extrusionAmount should not be modified")
+        mockLogger.warn.assert_called()

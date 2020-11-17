@@ -1,7 +1,7 @@
 # coding=utf-8
 """Module providing the Position class."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 from .CommonMixin import CommonMixin
 from .AxisPosition import AxisPosition
 

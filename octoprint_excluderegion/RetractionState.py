@@ -1,7 +1,7 @@
 # coding=utf-8
 """Module providing the RetractionState class."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 import re
 from .CommonMixin import CommonMixin
 
@@ -28,6 +28,10 @@ class RetractionState(CommonMixin):
     recoverExcluded : boolean
         Whether the recovery for this retraction was excluded or not (default False).  If it was
         excluded, it will need to be processed later.
+    allowCombine : boolean
+        Whether this retraction should be combined with subsequent retractions or not.  Retractions
+        may be combined as long as there is no extrusion/recovery executed between the two
+        retractions.
     """
 
     def __init__(
@@ -61,10 +65,38 @@ class RetractionState(CommonMixin):
             )
 
         self.recoverExcluded = False
+        self.allowCombine = True
         self.firmwareRetract = firmwareRetract
         self.extrusionAmount = extrusionAmount
         self.feedRate = feedRate
         self.originalCommand = originalCommand
+
+    def combine(self, other, logger):
+        """
+        Combine the retraction amount from the specified other instance with this instance.
+
+        Parameters
+        ----------
+        other : RetractionState
+            The other instance to combine with this instance.
+
+        Returns
+        -------
+            This instance
+        """
+        if (self.allowCombine):
+            if (self.firmwareRetract == other.firmwareRetract):
+                if (not self.firmwareRetract):
+                    self.extrusionAmount += other.extrusionAmount
+            else:
+                logger.warn(
+                    "Encountered mix of firmware and non-firmware retractions.  " +
+                    "Extruder position may not be tracked correctly."
+                )
+        else:
+            logger.warn("Cannot combine retractions, since allowCombine = False")
+
+        return self
 
     def generateRetractCommands(self, position):
         """

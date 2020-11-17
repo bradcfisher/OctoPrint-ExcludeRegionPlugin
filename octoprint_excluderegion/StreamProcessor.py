@@ -1,7 +1,7 @@
 # coding=utf-8
 """Class for processing a Gcode stream to apply exclude region processing."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 import copy
 
 from octoprint.filemanager.util import LineProcessorStream

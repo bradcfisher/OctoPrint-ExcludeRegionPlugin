@@ -7,7 +7,7 @@
 #      G5 [E<pos>] I<pos> J<pos> P<pos> Q<pos> X<pos> Y<pos>
 #
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import math
 

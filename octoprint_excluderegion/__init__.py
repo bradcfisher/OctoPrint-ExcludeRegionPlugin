@@ -4,10 +4,13 @@
 # Thoughts on improvements:
 # - Persist the defined regions for the selected file and restore them if the file
 #   is selected again later?
-#   - Add @-commands into the gcode file itself to define the regions? (assuming the regions should be modifiable)
-#   - Store the regions as metadata?  May want to compare file hash to make sure the file hasn't been updated since the regions were defined.
-#   - Simply create a copy of the file with the excluded Gcode removed?  This would probably print the cleanest,
-#     but would not allow restoring previously excluded regions without going back to the original file.
+#   - Add @-commands into the gcode file itself to define the regions? (assuming the regions
+#     should be modifiable)
+#   - Store the regions as metadata?  May want to compare file hash to make sure the file hasn't
+#     been updated since the regions were defined.
+#   - Simply create a copy of the file with the excluded Gcode removed?  This would probably print
+#     the cleanest, but would not allow restoring previously excluded regions without going back to
+#     the original file.
 #
 # - Preprocess the file to add @-commands to mark the begin/end Gcode scripts based on comments,
 #   similar to the Cancel Object plugin?
@@ -27,7 +30,7 @@
 #   current_position[Z_AXIS] -=
 #       hotend_offset[Z_AXIS][active_extruder] - hotend_offset[Z_AXIS][tmp_extruder];
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import logging
 import re
@@ -45,13 +48,14 @@ from .GcodeHandlers import GcodeHandlers
 from .ExcludeRegionState import ExcludeRegionState
 from .RectangularRegion import RectangularRegion
 from .CircularRegion import CircularRegion
-from .ExcludedGcode import ExcludedGcode, EXCLUDE_ALL, EXCLUDE_MERGE
+from .ExcludedGcode import ExcludedGcode, EXCLUDE_ALL, EXCLUDE_MERGE, EXCLUDE_EXCEPT_LAST
 from .AtCommandAction import AtCommandAction, ENABLE_EXCLUSION, DISABLE_EXCLUSION
 
 
 __plugin_name__ = "Exclude Region"
 __plugin_implementation__ = None
 __plugin_hooks__ = None
+__plugin_pythoncompat__ = ">=2.7,<4"
 
 EXCLUDED_REGIONS_CHANGED = "ExcludedRegionsChanged"
 
@@ -212,6 +216,19 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
                     "mode": EXCLUDE_MERGE,
                     "description": "Record advanced setting changes while excluding and apply " +
                                    "the most recent values in a single command after exiting the " +
+                                   "excluded area"
+                },
+                {
+                    "gcode": "M117",
+                    "mode": EXCLUDE_EXCEPT_LAST,
+                    "description": "Suppress display messages while excluding and output the " +
+                                   "last message encountered when exiting the excluded area"
+                },
+                {
+                    "gcode": "M73",
+                    "mode": EXCLUDE_MERGE,
+                    "description": "Suppress progress updates while excluding and output the " +
+                                   "most recent progress values encountered when exiting the " +
                                    "excluded area"
                 }
             ],
@@ -417,6 +434,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
         )):
             self._logger.info("Printing stopped: event=%s", event)
             self._activePrintJob = False
+
             if (self.clearRegionsAfterPrintFinishes):
                 self.state.resetState(True)
                 self._notifyExcludedRegionsChanged()
@@ -624,10 +642,10 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
     def _handleSettingsUpdated(self):
         """Update internal state when a settings change is detected."""
         self.clearRegionsAfterPrintFinishes = \
-            self._settings.getBoolean(["clearRegionsAfterPrintFinishes"])
+            self._settings.get_boolean(["clearRegionsAfterPrintFinishes"])
 
         self.mayShrinkRegionsWhilePrinting = \
-            self._settings.getBoolean(["mayShrinkRegionsWhilePrinting"])
+            self._settings.get_boolean(["mayShrinkRegionsWhilePrinting"])
 
         self.state.g90InfluencesExtruder = \
             settings().getBoolean(["feature", "g90InfluencesExtruder"])

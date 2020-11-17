@@ -1,7 +1,7 @@
 # coding=utf-8
 """Module providing the ExcludeRegionState class."""
 
-from __future__ import absolute_import
+from __future__ import absolute_import, division
 
 import logging
 import time
@@ -283,7 +283,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         Parameters
         ----------
         context : string
-            Context string (generally an At-Command) to include in log output.
+            Context string (generally an At-Command or OctoPrint event) to include in log output.
 
         Returns
         -------
@@ -311,7 +311,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         Parameters
         ----------
         context : string
-            Context string (generally an At-Command) to include in log output.
+            Context string (generally an At-Command or OctoPrint event) to include in log output.
         """
         if (not self._exclusionEnabled):
             self._logger.info("Exclusion enabled: context=%s", context)
@@ -390,19 +390,35 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             self.lastRetraction.recoverExcluded = False
             if (not self.lastRetraction.firmwareRetract):
                 self.lastRetraction.feedRate = self.feedRate
-        else:
-            # This is an additional retraction that hasn't had its recovery excluded
-            # It doesn't seem like this should occur in a well-formed file
-            # Since it's not expected, log it and let it pass through
-            self._logger.debug(
-                "Encountered multiple retractions without an intervening recovery " +
-                "(excluding=%s). Allowing this retraction to proceed: %s",
-                self.excluding, retract
-            )
+        elif (self.lastRetraction.allowCombine):
+            # Multiple retractions have been encountered without any intervening recovery/extrusion.
+            # This type of retraction can be genrated by Slic3r when retraction is enabled along
+            # with wipe or retract_layer_change.  That combination of options can generate multiple
+            # retractions as part of the wipe or layer changed moves.
+
+            self.lastRetraction.combine(retract, self._logger)
+
             if (self.excluding):
+                self._logger.debug(
+                    "Encountered multiple retractions without an intervening recovery " +
+                    "(excluding=%s). Allowing this retraction to proceed: %s",
+                    self.excluding, retract
+                )
+
                 returnCommands = retract.generateRetractCommands(self.position)
             else:
                 returnCommands.append(retract.originalCommand)
+        elif (self.excluding):
+            # A retraction was encountered that would have normally been combined, but the current
+            # retraction state no longer permits accumulating more retraction (e.g. some
+            # extrusion/recovery occurred between the prior retraction and this retraction.
+            # In this case, we simply ignore the retraction to prevent over-retracting the filament.
+            self._logger.debug(
+                "Suppressing retraction following excluded recover (already retracted)"
+            )
+        else:
+            # Let it pass unhindered
+            returnCommands.append(retract.originalCommand)
 
         self._logger.debug(
             "retraction: excluding=%s, retract=%s, returnCommands=%s",
@@ -494,6 +510,8 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         returnCommands = []
 
         if (self.lastRetraction is not None):
+            self.lastRetraction.allowCombine = False
+
             if (self.excluding):
                 # If excluding, and encountered a recovery (not an extruding move), then update the
                 # current retraction state to indicate the retraction should be automatically
@@ -565,6 +583,35 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             return [cmd]
 
         return []
+
+    def _processExcludedMove(self, cmd, deltaE):
+        """
+        Process a command for which some point falls within an excluded region.
+
+        Parameters
+        ----------
+        cmd : Gcode command string
+            The Gcode command that is being processed.  Typically a G0/G1 with some X/Y/Z component.
+        deltaE : number
+            The offset to apply to the extruder position, in millimeters.
+
+        Returns
+        -------
+        List of Gcode commands
+            The Gcode command(s) to execute, or an empty list if none were generated.  It is up to
+            the caller to ensure these commands are sent to the printer.
+        """
+        if (not self.excluding):
+            returnCommands = self.enterExcludedRegion(cmd)
+        else:
+            returnCommands = []
+
+        if (deltaE < 0):
+            # To accommodate for Slic3r retraction behavior, check for retractions
+            # for moves as well.
+            returnCommands.extend(self._processNonMove(cmd, deltaE))
+
+        return returnCommands
 
     def processLinearMoves(self, cmd, extruderPosition, feedRate, finalZ, *xyPairs):
         """
@@ -649,13 +696,13 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             # for Marlin 1.1.9).
             returnCommands = self._processNonMove(cmd, deltaE)
         elif (self.isAnyPointExcluded(*xyPairs)):
-            if (not self.excluding):
-                returnCommands = self.enterExcludedRegion(cmd)
-            else:
-                returnCommands = []
+            returnCommands = self._processExcludedMove(cmd, deltaE)
         elif (self.excluding):
+            # Moving from an excluded region into a non-excluded region.
+            # Processes the necessary commands to move the tool to the new position specified by the
+            # command, but does not perform any extrusion or retraction recovery.
             returnCommands = self.exitExcludedRegion(cmd)
-        elif (deltaE > 0):
+        elif (deltaE != 0):
             # Recover any retraction recorded from the excluded region before the next
             # extrusion occurs
             returnCommands = self.recoverRetractionIfNeeded(cmd, False)
@@ -722,7 +769,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         returnCommands = []
 
         if (self.pendingCommands):
-            for gcode, cmdArgs in self.pendingCommands.iteritems():
+            for gcode, cmdArgs in self.pendingCommands.items():
                 if (isinstance(cmdArgs, Mapping)):
                     returnCommands.append(
                         self.gcodeParser.buildCommand(gcode, **cmdArgs)
@@ -740,15 +787,16 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         """
         Determine the Gcode commands to execute when the tool exits an excluded region.
 
-        Generated commands include recovery for a retraction initiated inside of an excluded
-        region, as well as any custom Gcode commands configured for the exitingExcludedRegionGcode
+        Generated commands include the commands necessary to move the tool to the appropriate
+        position, as well as any custom Gcode commands configured for the exitingExcludedRegionGcode
         setting.
 
         Parameters
         ----------
         cmd : string
             The Gcode command that caused the tool to exit the excluded region, used for logging.
-            May be an At-Command if triggered as a result of disabling exclusion.
+            May be an At-Command if triggered as a result of disabling exclusion, or None if
+            triggered due to user cancellation.
 
         Returns
         -------

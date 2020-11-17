@@ -314,14 +314,23 @@ G4 - dwell / delay
 By default, delay commands are ignored when inside an excluded region to reduce oozing.
 
 ```
+M73 - Set Print Progress
 M204 - Set accelerations
 M205 - Set advanced settings
 ```
 
-By default, M204 and M205 are tracked while excluding, but only the last value set for each
+By default, M73, M204 and M205 are tracked while excluding, but only the last value set for each
 parameter is processed after exiting the excluded area.  This behavior is intended to reduce the
 amount of communication with the printer while processing excluded commands to minimize processing
 delays and oozing.
+
+```
+M117 - Set LCD Message
+```
+
+By default, LCD messages are suppressed while excluding, and the last message encountered is output
+when exiting an excluded area.  This behavior is intended to reduce the amount of communication
+with the printer while processing excluded commands to minimize processing delays and oozing.
 
 ### @-Command Actions
 
@@ -334,7 +343,7 @@ the `"@-Command Actions"` section.
 ```
 
 By default, the plugin will respond to an `@ExcludeRegion disable` (or `@ExcludeRegion off`) command
-by disabling exlusion processing.  If exclusion is already disabled, this will have no effect.
+by disabling exclusion processing.  If exclusion is already disabled, this will have no effect.
 However, if exclusion is currently enabled, the plugin will stop filtering subsequent Gcode commands
 against the defined exclusion regions.  Additionally, if exclusion is currently occurring, that
 exclusion will be immediately ended.
@@ -352,7 +361,7 @@ This is purely for documentation/logging purposes and is otherwise ignored by th
 ```
 
 By default, the plugin will respond to an `@ExcludeRegion enable` (or `@ExcludeRegion on`) command
-by enabling exlusion.  If exclusion is already enabled, this will have no effect.  However, if
+by enabling exclusion.  If exclusion is already enabled, this will have no effect.  However, if
 exclusion is disabled, exclusion will be re-enabled and any subsequent Gcode commands will be
 processed against any defined exclusion regions.
 
