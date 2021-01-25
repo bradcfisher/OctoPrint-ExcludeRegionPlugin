@@ -1,6 +1,6 @@
 
 # python2 or python3
-PYTHON=python2
+PYTHON=python3
 
 SOURCE_DIR=octoprint_excluderegion
 TEST_DIR=test

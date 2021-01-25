@@ -219,7 +219,7 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
 
         raise ValueError("Specified region not found")
 
-    def isPointExcluded(self, x, y):
+    def isPointExcluded(self, x, y, z):
         """
         Test a point to determine whether it is contained in an excluded region.
 
@@ -229,6 +229,8 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
             The x coordinate of the point to test, in physical units
         y : float
             The y coordinate of the point to test, in physical units
+        z : float
+            The z coordinate of the point to test, in physical units
 
         Returns
         -------
@@ -237,7 +239,8 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         """
         if (self._exclusionEnabled):
             for region in self.excludedRegions:
-                if (region.containsPoint(x, y)):
+                
+                if (region.containsPoint(x, y, z)):
                     return True
 
         return False
@@ -262,12 +265,13 @@ class ExcludeRegionState(object):  # pylint: disable=too-many-instance-attribute
         if (self._exclusionEnabled):
             xAxis = self.position.X_AXIS
             yAxis = self.position.Y_AXIS
-
+            zAxis = self.position.Z_AXIS
+            
             for index in range(0, len(xyPairs), 2):
                 x = xAxis.setLogicalPosition(xyPairs[index])
                 y = yAxis.setLogicalPosition(xyPairs[index + 1])
 
-                if (self.isPointExcluded(x, y)):
+                if (self.isPointExcluded(x, y, zAxis.current)):
                     return True
 
         return False

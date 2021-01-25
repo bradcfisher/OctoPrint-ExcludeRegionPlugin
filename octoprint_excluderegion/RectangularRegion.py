@@ -3,12 +3,10 @@
 
 from __future__ import absolute_import, division
 
-import uuid
-
-from .CommonMixin import CommonMixin
+from .RegionMixin import RegionMixin
 
 
-class RectangularRegion(CommonMixin):
+class RectangularRegion(RegionMixin):
     """
     A rectangular region to exclude from printing.
 
@@ -26,6 +24,10 @@ class RectangularRegion(CommonMixin):
         The y coordinate of the bottom edge.  Expected to be >= y1.
     id : string
         Unique identifier assigned to the region.
+    minLayer : Layer
+        The minimum layer at which this region should be enforced.  Default is 0.
+    maxLayer : Layer
+        The maximum layer at which this region should be enforced.  Default is None.
     """
 
     def __init__(self, *args, **kwargs):
@@ -50,11 +52,17 @@ class RectangularRegion(CommonMixin):
             The x coordinate of a horizontal edge.
         kwargs.id : string
             Unique identifier assigned to the region.
+        kwargs.minLayer : Layer
+            The minimum layer at which this region should be enforced.  Default is 0.
+        kwargs.maxLayer : Layer
+            The maximum layer at which this region should be enforced.  Default is None.
         """
+        RegionMixin.__init__(self, *args, **kwargs)
+
         # pylint: disable=invalid-name
         if args:
             toCopy = args[0]
-            assert isinstance(toCopy, RectangularRegion), "Expected a RectangularRegion instance"
+            assert isinstance(toCopy, self.__class__), "Expected a " + self.__class__ + " instance"
 
             self.x1 = toCopy.x1
             self.y1 = toCopy.y1
@@ -62,7 +70,6 @@ class RectangularRegion(CommonMixin):
             self.y2 = toCopy.y2
             self.id = toCopy.id
         else:
-            regionId = kwargs.get("id", None)
             x1 = float(kwargs.get("x1", 0))
             y1 = float(kwargs.get("y1", 0))
             x2 = float(kwargs.get("x2", 0))
@@ -79,21 +86,24 @@ class RectangularRegion(CommonMixin):
             self.x2 = x2
             self.y2 = y2
 
-            # pylint: disable=invalid-name
-            if (regionId is None):
-                self.id = str(uuid.uuid4())
-            else:
-                self.id = regionId
-
-    def containsPoint(self, x, y):
+    def containsPoint(self, x, y, z):
         """
         Check if the specified point is contained in this region.
+
+        Parameters
+        ----------
+        x : float
+            The x component of the point to test
+        y : float
+            The y component of the point to test
+        z : float
+            The z component of the point to test
 
         Returns
         -------
         True if the point is inside this region, and False otherwise.
         """
-        return (x >= self.x1) and (x <= self.x2) and (y >= self.y1) and (y <= self.y2)
+        return self.inHeightRange(z) and (x >= self.x1) and (x <= self.x2) and (y >= self.y1) and (y <= self.y2)
 
     def containsRegion(self, otherRegion):
         """

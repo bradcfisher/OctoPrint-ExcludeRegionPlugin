@@ -1,23 +1,64 @@
 $(function() {
 
+  var BASE_BORDER_RANGE = 5;
+
+  var RENDER_REGION_ALPHA = 0.5;
+  var RENDER_BORDER_WIDTH = 3.0;
+  var RENDER_FILL_SELECTED = "orange";
+  var RENDER_STROKE_SELECTED = "black";
+  var RENDER_FILL_NORMAL = "red";
+  var RENDER_STROKE_NORMAL = "gray";
+
   var INSIDE = 1;
   var TOP    = 2;
   var BOTTOM = 4;
   var LEFT   = 8;
   var RIGHT  = 16;
-
-  function RectangularRegion(x1, y1, x2, y2, id) {
+  
+  function Layer(number, height) {
+    var self = this;
+    if (arguments.length == 1) {
+      self.number = number.number;
+      self.height = number.height;
+    } else {
+      self.number = number;
+      self.height = height;
+    }
+  }
+  
+  function Region(type, minLayer, maxLayer, id) {
     var self = this;
 
-    self.type = "RectangularRegion";
+    self.type = type;
+    self.id = id;
+    self.minLayer = minLayer ? new Layer(minLayer) : null;
+    self.maxLayer = maxLayer ? new Layer(maxLayer) : null;
+
+    self.getMinHeight = function() {
+      return (self.minLayer ? self.minLayer.height : 0);
+    }
+
+    self.getMaxHeight = function() {
+      return (self.maxLayer ? self.maxLayer.height : null);
+    }
+
+    self.inHeightRange = function(z) {
+      var max = self.getMaxHeight();
+      return (self.getMinHeight() <= z) && (!max || (max >= z));
+    }
+  }
+
+  function RectangularRegion(x1, y1, x2, y2, minLayer, maxLayer, id) {
+    var self = this;
+
     if (arguments.length == 1) {
+      Region.call(self, "RectangularRegion", x1.minLayer, x1.maxLayer, x1.id);
       self.x1 = x1.x1;
       self.x2 = x1.x2;
       self.y1 = x1.y1;
       self.y2 = x1.y2;
-      self.id = x1.id;
     } else {
-      self.id = id;
+      Region.call(self, "RectangularRegion", minLayer, maxLayer, id);
       self.x1 = x1;
       self.x2 = x2;
       self.y1 = y1;
@@ -38,6 +79,12 @@ $(function() {
         self.y1 = self.y2;
         self.y2 = y;
       }
+    }
+    
+    self.getBounds = function() {
+      self.normalizeX();
+      self.normalizeY();
+      return { x1: self.x1, y1: self.y1, x2: self.x2, y2: self.y2 };
     }
 
     // if range is 0 or not specified, will only detect if INSIDE or OUTSIDE
@@ -130,23 +177,35 @@ $(function() {
       ctx.closePath();
     }
   }
+  RectangularRegion.prototype = new Region();
+  Object.defineProperty(RectangularRegion.prototype, 'constructor', {
+    value: RectangularRegion,
+    enumerable: false,
+    writable: true });
+  self.RectangularRegion = RectangularRegion;
 
-  function CircularRegion(cx, cy, r, id) {
+  function CircularRegion(cx, cy, r, minLayer, maxLayer, id) {
     var self = this;
 
-    self.type = "CircularRegion";
     if (arguments.length == 1) {
-      self.id = cx.id;
+      Region.call(self, "CircularRegion", cx.minLayer, cx.maxLayer, cx.id);
       self.cx = cx.cx;
       self.cy = cx.cy;
       self.r = cx.r;
     } else {
-      self.id = id;
+      Region.call(self, "CircularRegion", minLayer, maxLayer, id);
       self.cx = cx;
       self.cy = cy;
       self.r = r;
     }
 
+    self.getBounds = function() {
+      return {
+        x1: self.cx - self.r, y1: self.cy - self.r,
+        x2: self.cx + self.r, y2: self.cy + self.r
+      };
+    }
+    
     // if range is 0 or not specified, will only detect if INSIDE or OUTSIDE
     self.pointNearRegion = function(pt, range) {
       range = Math.max(range, 0);
@@ -192,6 +251,12 @@ $(function() {
       }
     }
   }
+  CircularRegion.prototype = new Region();
+  Object.defineProperty(CircularRegion.prototype, 'constructor', {
+    value: CircularRegion,
+    enumerable: false,
+    writable: true });
+  self.CircularRegion = CircularRegion;
 
   function ExcludeRegionPluginViewModel(dependencies) {
     var self = this;
@@ -220,6 +285,8 @@ $(function() {
     });
 
     self.excludedRegions = ko.observableArray();
+    
+    self.currentLayer = ko.observable();
 
     function retrieveExcludeRegions() {
       OctoPrint.simpleApiGet("excluderegion").done(function(result) {
@@ -229,13 +296,23 @@ $(function() {
     
     var $excludeRegionsOverlay = $('<canvas id="gcode_canvas_excludeRegions_overlay">');
     var $editRegionOverlay = $('<canvas id="gcode_canvas_editRegion_overlay">');
+    $editRegionOverlay.tooltip({
+      trigger: "manual",
+      placement: "top-start",
+      animation: false,
+      title: function() {
+        var min = selectedRegion.getMinHeight();
+        var max = selectedRegion.getMaxHeight();
+        console.log("tooltip title: min=", min, "max=", max, "selectedRegion=", selectedRegion);
+        return "Z range: " + min + "mm to " + (max ? max +"mm" : "Infinity");
+      }
+    });
 
     var excludeRegionsOverlayContext = $excludeRegionsOverlay[0].getContext('2d');
     var editRegionOverlayContext = $editRegionOverlay[0].getContext('2d');
 
     var excludeRegionsOverlay_renderStroke = false;
     var selectedRegion = null;
-    var originalRegion = null;
     var selectedRegionType = null;
     var editMode = null;  // new|size|adjust|adjust-limited|select
 
@@ -247,18 +324,26 @@ $(function() {
 */
 
     function cloneRegion(region) {
+      var clone;
       switch (region.type) {
         case "RectangularRegion":
-          return new RectangularRegion(region);
+          clone = new RectangularRegion(region);
           break;
 
         case "CircularRegion":
-          return new CircularRegion(region);
+          clone = new CircularRegion(region);
           break;
           
         default:
           console.log("Unexpected region type:", region);
+          return null;
       }
+      
+      if (region instanceof Region) {
+        clone.relatedRegion = region.relatedRegion || region;
+      }
+      
+      return clone;
     }
 
     var pixelRatio = window.devicePixelRatio || 1;
@@ -266,7 +351,7 @@ $(function() {
       var canvas = $excludeRegionsOverlay[0];
       var x = (event.offsetX !== undefined ? event.offsetX : (event.pageX - canvas.offsetLeft));
       var y = (event.offsetY !== undefined ? event.offsetY : (event.pageY - canvas.offsetTop));
-      var pt = transformedPoint(x * pixelRatio, y * pixelRatio);
+      var pt = transformViewToDrawing(x * pixelRatio, y * pixelRatio);
 
       /*
       overlayOutput(
@@ -284,6 +369,7 @@ $(function() {
     function regionUnderPoint(pt) {
       var regions = self.excludedRegions();
       for (var i = regions.length - 1; i >= 0; i--) {
+        //console.log("regionUnderPoint: pt=", pt, "contains=", regions[i].containsPoint(pt), "region=", regions[i]);
         if (regions[i].containsPoint(pt)) {
           return regions[i];
         }
@@ -293,28 +379,39 @@ $(function() {
     // Finds a region near the specified point
     // Regions are searched in reverse creation order, and the first region found is returned.
     function regionNearPoint(pt, range) {
-      range = Math.max(range || 5, 0);
+      range = Math.max(range || BASE_BORDER_RANGE / viewportScale, 0);
 
       var regions = self.excludedRegions();
       for (var i = regions.length - 1; i >= 0; i--) {
         var near = regions[i].pointNearRegion(pt, range);
-        console.log("regionNearPoint: region=", regions[i], "near=", near);
+        //console.log("regionNearPoint: region=", regions[i], "near=", near);
         if (near) {
           return [regions[i], near];
         }
       }
     }
 
-    // Updates the mouse cursor when modifying a region
+    // Updates the mouse cursor when the mouse position changes while modifying a region
     function handleAdjustMouseHover(e) {
       var pt = eventPositionToCanvasPt(e);
       updateCursor(selectedRegion, pt, (editMode == "adjust"));
     }
 
+    var viewportScale = 1;
+    function updateViewportScale() {
+      var p = transformViewToDrawing(0,0);
+      var x = p.x;
+      var y = p.y;
+      p = transformViewToDrawing(pixelRatio,0);
+      x -= p.x;
+      y -= p.y;
+      viewportScale = 1 / Math.hypot(x, y);
+    }
+
     // Updates the mouse cursor to indicate what action (move, resize, none) can be taken for a
     // given region based on the specified point.
     function updateCursor(region, pt, allowMove) {
-      var near = region.pointNearRegion(pt, 5);
+      var near = region.pointNearRegion(pt, BASE_BORDER_RANGE / viewportScale);
 
       var $gcodeCanvas = $("#gcode_canvas");
       var cursor = "default";
@@ -344,6 +441,78 @@ $(function() {
       $gcodeCanvas.css({"cursor": cursor});
     }
 
+    // Selects the specified region & returns the edit overlay clone
+    self.selectRegion = function(region, retainIfNull) {
+      //console.log("selectRegion(region=", region, ", retainIfNull=", retainIfNull, ")");
+      
+      if ((region != null) || !retainIfNull) {
+        region = (region != null ? region.relatedRegion || region : null);
+        
+        var relatedRegion = (selectedRegion != null ? selectedRegion.relatedRegion || selectedRegion : null);
+        if (region != relatedRegion) {
+          // If a region is selected, then update the internal selection state
+          if (region != null) {
+            if (self.excludedRegions().indexOf(region) != -1) {
+              //console.log("selectRegion: region is registered, creating clone");
+              region = cloneRegion(region);
+            }
+            selectedRegion = region;
+            selectedRegionType = region.type;
+            
+            $editRegionOverlay.tooltip('show');
+          } else {
+            selectedRegion = null;
+            selectedRegionType = null;
+            
+            $editRegionOverlay.tooltip('hide');
+          }
+        }
+        
+        renderEditRegionOverlay();
+      }
+
+      //console.log("selectRegion: DONE: selectedRegion=", selectedRegion, ", selectedRegionType=", selectedRegionType);
+
+      return selectedRegion;
+    };
+
+    // Selects the region under the point, if any, and returns the overlay clone
+    self.selectRegionUnderPoint = function(point, retainIfNotFound) {
+      return self.selectRegion(regionUnderPoint(point), retainIfNotFound);
+    };
+
+    function selectByRelativeIndex(name, offset, region) {
+      region = region || selectedRegion;
+      if (region == null) {
+        return null; // no selection
+      }
+      
+      region = region.relatedRegion || region;
+
+      var regions = self.excludedRegions();
+      var idx = regions.indexOf(region);
+      if (idx == -1) {
+        console.log(name + ": Specified region not found, selection not updated");
+        return selectedRegion;
+      }
+
+      idx = (idx + offset) % regions.length;
+      if (idx < 0) {
+        idx += regions.length;
+      }
+      console.log(name + ": Selecting region at idx=", idx, " (regions.length=", regions.length, ")");
+      
+      return self.selectRegion(regions[idx]);
+    }
+    
+    self.selectPreviousRegion = function(region) {
+      return selectByRelativeIndex("selectPreviousRegion", -1, region);
+    };
+
+    self.selectNextRegion = function(region) {
+      return selectByRelativeIndex("selectPreviousRegion", 1, region);
+    };
+
     // Highlights the region the mouse is over and updates the mouse cursor when in select mode
     function handleSelectMouseHover(e) {
       var pt = eventPositionToCanvasPt(e);
@@ -352,47 +521,62 @@ $(function() {
       if (handleSelectMouseHover.lastRegion != region) {
         handleSelectMouseHover.lastRegion = region;
 
-        originalRegion = region;
-        selectedRegion = (region != null ? cloneRegion(region) : null);
-        renderEditRegionOverlay();
+        self.selectRegion(region);
 
-        var cursor = (region ? "grab" : "default");
-        console.log("handleSelectMouseHover: set cursor=", cursor);
+        var cursor = (region ? "pointer" : "default");
+        //console.log("handleSelectMouseHover: set cursor=", cursor);
         $("#gcode_canvas").css({"cursor": cursor});
       }
     }
 
     // Selects the region under the mouse cursor when the user starts to drag the canvas
     function captureDragStartEventSelect(pt) {
-      console.log("captureDragStartEventSelect: pt=", pt);
+      //console.log("captureDragStartEventSelect: pt=", pt);
 
-      // Select the region under the point, if any
-      selectedRegion = regionUnderPoint(pt);
-
-      // If a region is selected, then change the state to adjust mode
-      if (selectedRegion != null) {
+      var region = self.selectRegionUnderPoint(pt);
+      //console.log("captureDragStartEventSelect: selectRegionUnderPoint=", region);
+      if (region != null) {
         $("#gcode_canvas").off("mousemove", handleSelectMouseHover);
-        originalRegion = selectedRegion;
-        selectedRegion = cloneRegion(selectedRegion);
-        beginEditMode(selectedRegion, "adjust");
+        beginEditMode(region, "adjust");
         return false;
+      }
+    }
+
+    var zHeightSubscription;
+    function registerZHeightSubscription(callback) {
+      if (zHeightSubscription) {
+        unregisterZHeightSubscription();
+      }
+      
+      zHeightSubscription = self.currentLayer.subscribe(function(value) {
+        callback(value);
+        console.log("zHeightSubscription: new layer=", value);
+        $editRegionOverlay.tooltip('enable');
+        $editRegionOverlay.tooltip('show');
+      });
+    }
+
+    function unregisterZHeightSubscription() {
+      if (zHeightSubscription) {
+        zHeightSubscription.dispose();
       }
     }
 
     // Creates a new region at the specified point and starts capturing mouse events
     // when the user starts to drag the canvas
     function captureDragStartEventCreate(pt) {
-      originalRegion = null;
-
       // Create a new region locally and prevent the default action
       if (selectedRegionType == "RectangularRegion") {
-        selectedRegion = new RectangularRegion(pt.x, pt.y, pt.x, pt.y);
+        self.selectRegion(new RectangularRegion(pt.x, pt.y, pt.x, pt.y, self.currentLayer()));
       } else if (selectedRegionType == "CircularRegion") {
-        selectedRegion = new CircularRegion(pt.x, pt.y, 0);
+        self.selectRegion(new CircularRegion(pt.x, pt.y, 0, self.currentLayer()));
       } else {
         throw new ArgumentError("Unsupported selectedRegionType: "+ selectedRegionType);
       }
-      renderEditRegionOverlay();
+      
+      registerZHeightSubscription(function(value) {
+          selectedRegion.minLayer = new Layer(value);
+      });
 
       // Remove hook for drag start event
       GCODE.renderer.setOption({
@@ -431,9 +615,10 @@ $(function() {
       return false;
     }
     
+    // Handles drag start events when resizing a region
     function captureDragStartEventSize(startPt) {
       console.log("captureDragStartEventSize: pt=", startPt);
-      var near = selectedRegion.pointNearRegion(startPt, 5);
+      var near = selectedRegion.pointNearRegion(startPt, BASE_BORDER_RANGE / viewportScale);
       
       var isFullEditingEnabled = (editMode == "adjust");
 
@@ -477,13 +662,14 @@ $(function() {
         // Resize
         mouseMoveHandler = function(e) {
           var pt = eventPositionToCanvasPt(e);
+          var relatedRegion = selectedRegion.relatedRegion || selectedRegion;
 
           if (selectedRegion instanceof RectangularRegion) {
             // Compute new edge position
-            var x1 = originalRegion.x1;
-            var x2 = originalRegion.x2;
-            var y1 = originalRegion.y1;
-            var y2 = originalRegion.y2;
+            var x1 = relatedRegion.x1;
+            var x2 = relatedRegion.x2;
+            var y1 = relatedRegion.y1;
+            var y2 = relatedRegion.y2;
 
             if (near & LEFT) {
               selectedRegion.x1 = (isFullEditingEnabled || pt.x <= x1 ? pt.x : x1);
@@ -500,7 +686,7 @@ $(function() {
             // Compute new size
             var r = Math.hypot(pt.x - selectedRegion.cx, pt.y - selectedRegion.cy);
             if (!isFullEditingEnabled)
-              r = Math.max(r, originalRegion.r);
+              r = Math.max(r, relatedRegion.r);
 
             selectedRegion.r = r;
           } else {
@@ -524,14 +710,99 @@ $(function() {
       return false;
     }
     
+    var _editPreviousLayerData;
+    var _editLastLayerSelected;
+    var _editOriginalFormatter;
+
+    function _editOnChangeLayer(event) {
+      var v = event.value;
+      var v0Diff = (v[0] != _editPreviousLayerData[0]);
+      var v1Diff = (v[1] != _editPreviousLayerData[1]);
+      if (!(v0Diff || v1Diff)) {
+        return;
+      }
+      _editPreviousLayerData[0] = v[0];
+      _editPreviousLayerData[1] = v[1];
+
+      var value = self.gcodeViewModel.maxLayer - (v0Diff ? v[0] : v[1]);
+
+      console.log("changeLayer: original value=", v, " (", v0Diff, ",", v1Diff, ") forwarded value=", value, " maxLayer=", self.gcodeViewModel.maxLayer);
+
+      if (v1Diff) {
+        registerZHeightSubscription(function(value) {
+            selectedRegion.minLayer = new Layer(value);
+        });
+      } else {
+        registerZHeightSubscription(function(value) {
+            selectedRegion.maxLayer = new Layer(value);
+        });
+      }
+
+      _editLastLayerSelected = value;
+      event.value = value
+      self.gcodeViewModel.changeLayer(event);
+    };
+    
+    function _editOverrideFormatter(value) {
+      return _editOriginalFormatter.call(this, self.gcodeViewModel.maxLayer - value);
+    }
+
+    function hijackGcodeLayerSlider() {
+      // Update the layer slider to show the current min and max layer for the selection
+      var maxLayer = self.gcodeViewModel.maxLayer;
+      var minLayerSel = selectedRegion.minLayer.number;
+      var maxLayerSel = selectedRegion.maxLayer ? selectedRegion.maxLayer.number : maxLayer;
+      _editOriginalOnChangeLayer = self.gcodeViewModel.changeLayer;
+      _editPreviousLayerData = [maxLayer - maxLayerSel, -1];
+      _editLastLayerSelected = minLayerSel;
+
+      var slider = self.gcodeViewModel.layerSlider.data('slider');
+      var value = [maxLayer - maxLayerSel, maxLayer - minLayerSel];
+      _editOriginalFormatter = slider.formatter;
+      slider.formatter = _editOverrideFormatter;
+      slider.range = true;
+      slider.reversed = false;
+      slider.handle2.removeClass('hide');
+      self.gcodeViewModel.layerSlider
+        .off('slide', self.gcodeViewModel.changeLayer)
+        .on('slide', _editOnChangeLayer)
+        .slider("setValue", value);
+        
+      slider.element
+				.trigger({
+					'type': 'slide',
+					'value': value
+				})
+				.data('value', value)
+				.prop('value', value);
+    }
+
+    function restoreGcodeLayerSlider() {
+      var slider = self.gcodeViewModel.layerSlider.data('slider');
+      slider.formatter = _editOriginalFormatter;
+      slider.range = false;
+      slider.reversed = true;
+      slider.handle2.addClass('hide');
+      self.gcodeViewModel.layerSlider
+        .off('slide', _editOnChangeLayer)
+        .on('slide', self.gcodeViewModel.changeLayer)
+        .slider("setValue", _editLastLayerSelected);
+
+      slider.element
+				.trigger({
+					'type': 'slide',
+					'value': _editLastLayerSelected
+				})
+				.data('value', _editLastLayerSelected)
+				.prop('value', _editLastLayerSelected);
+    }
+    
     function endEditMode() {
       if (beginEditMode.lastSelector) {
         $(beginEditMode.lastSelector).hide();
         $("#gcode_exclude_controls .main").show();
         delete beginEditMode.lastSelector;
-        originalRegion = null;
-        selectedRegion = null;
-        selectedRegionType = null;
+        self.selectRegion(null);
         editMode = null;
 
         // Remove hook for drag start event
@@ -544,6 +815,9 @@ $(function() {
         $gcodeCanvas.off("mousemove", handleSelectMouseHover);
         $gcodeCanvas.off("mousemove", handleAdjustMouseHover);
 
+        unregisterZHeightSubscription();
+        restoreGcodeLayerSlider();
+        
         renderExcludeRegionsOverlay(false);
       }
     }
@@ -555,12 +829,9 @@ $(function() {
       }
 
       if (regionOrType.type) {
-        originalRegion = regionOrType;
-        selectedRegion = cloneRegion(regionOrType);
-        selectedRegionType = regionOrType.type;
+        self.selectRegion(regionOrType);
       } else {
-        originalRegion = null;
-        selectedRegion = null;
+        self.selectRegion(null);
         selectedRegionType = regionOrType;
       }
 
@@ -618,6 +889,10 @@ $(function() {
             $deleteButton.show();
             $deleteButton.removeClass("disabled");
           }
+          
+          unregisterZHeightSubscription();
+          hijackGcodeLayerSlider();
+
           break;
       }
 
@@ -916,8 +1191,8 @@ $(function() {
     }
 
     function clearContext(ctx) {
-      var p1 = transformedPoint(0, 0);
-      var p2 = transformedPoint(ctx.canvas.width, ctx.canvas.height);
+      var p1 = transformViewToDrawing(0, 0);
+      var p2 = transformViewToDrawing(ctx.canvas.width, ctx.canvas.height);
       ctx.clearRect(p1.x, p1.y, p2.x - p1.x, p2.y - p1.y);
     }
 
@@ -928,10 +1203,10 @@ $(function() {
       clearContext(ctx);
 
       if (selectedRegion != null) {
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = "orange";
-        ctx.lineWidth = 1.0;
-        ctx.strokeStyle = "black";
+        ctx.globalAlpha = RENDER_REGION_ALPHA;
+        ctx.fillStyle = RENDER_FILL_SELECTED;
+        ctx.lineWidth = RENDER_BORDER_WIDTH / viewportScale;
+        ctx.strokeStyle = RENDER_STROKE_SELECTED;
 
         ctx.beginPath();
         selectedRegion.renderPath(ctx);
@@ -951,23 +1226,25 @@ $(function() {
 
       clearContext(ctx);
 
-      ctx.globalAlpha = 0.5;
-      ctx.fillStyle = "red";
-      ctx.lineWidth = 1.0;
-      ctx.strokeStyle = GCODE.renderer.getOptions().colorGrid;
+      ctx.globalAlpha = RENDER_REGION_ALPHA;
+      ctx.lineWidth = RENDER_BORDER_WIDTH / viewportScale;
+      ctx.strokeStyle = RENDER_STROKE_NORMAL; //GCODE.renderer.getOptions().colorGrid;
 
       var regions = self.excludedRegions();
       var selRegion;
 
-      ctx.beginPath();
       for (var i = regions.length - 1; i >= 0; --i) {
-        if (selectedRegion && (regions[i].id == selectedRegion.id)) {
-          selRegion = regions[i];
+        var region = regions[i];
+        if (selectedRegion && (region.id == selectedRegion.id)) {
+          // Save to draw selected region last
+          selRegion = region;
         } else {
-          regions[i].renderPath(ctx);
+          ctx.fillStyle = region.inHeightRange(self.currentLayer().height) ? RENDER_FILL_NORMAL : ctx.strokeStyle;
+          ctx.beginPath();
+          region.renderPath(ctx);
+          ctx.fill();
         }
       }
-      ctx.fill();
 
       if (selRegion) {
         ctx.fillStyle = ctx.strokeStyle;
@@ -998,12 +1275,18 @@ $(function() {
       renderFrame("excludeRegionsOverlay", renderExcludeRegionsOverlay_callback);
     }
 
-    var svg = document.createElementNS("http://www.w3.org/2000/svg",'svg');
-    var pt  = svg.createSVGPoint();
-    overlayXform = svg.createSVGMatrix();
-    function transformedPoint(x,y) {
-        pt.x=x; pt.y=y;
-        return pt.matrixTransform(overlayXform.inverse());
+    var _xformSvg = document.createElementNS("http://www.w3.org/2000/svg",'svg');
+    var _xformPt = _xformSvg.createSVGPoint();
+    overlayXform = _xformSvg.createSVGMatrix();
+
+    function transformViewToDrawing(x,y) {
+        _xformPt.x=x; _xformPt.y=y;
+        return _xformPt.matrixTransform(overlayXform.inverse());
+    }
+
+    function transformDrawingToView(x,y) {
+        _xformPt.x=x; _xformPt.y=y;
+        return _xformPt.matrixTransform(overlayXform);
     }
 
     var startupComplete = false;
@@ -1039,6 +1322,7 @@ $(function() {
           overlayXform = xform;
           excludeRegionsOverlayContext.setTransform(xform.a, xform.b, xform.c, xform.d, xform.e, xform.f);
           editRegionOverlayContext.setTransform(xform.a, xform.b, xform.c, xform.d, xform.e, xform.f);
+          updateViewportScale();
           renderExcludeRegionsOverlay();
           renderEditRegionOverlay();
           // Invoke any previously registered viewport change handler to ensure we don't interfere
@@ -1058,6 +1342,13 @@ $(function() {
         }
 */
       });
+      
+      previousOnLayerSelected = self.gcodeViewModel._onLayerSelected;
+      self.gcodeViewModel._onLayerSelected = function(layer) {
+        previousOnLayerSelected(layer);
+        self.currentLayer(layer ? new Layer(layer.number, layer.height) : null);
+        renderExcludeRegionsOverlay();
+      };
 
       self.excludedRegions.subscribe(function() {
         console.log("ExcludeRegionPlugin:: excludedRegions updated, redrawing GCODE viewer: excludedRegions=", self.excludedRegions());
