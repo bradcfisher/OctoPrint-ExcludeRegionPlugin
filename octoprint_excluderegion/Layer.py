@@ -7,7 +7,6 @@ from .CommonMixin import CommonMixin
 
 
 class Layer(CommonMixin):
-
     """
     Object containing drawing layer information.
 
@@ -16,12 +15,26 @@ class Layer(CommonMixin):
     height : number
         The Z height of the layer
     number : number
-        The layer number (
+        The layer number
     """
+
     def __init__(self, *args, **kwargs):
+        """
+        Initialize the instance properties.
+
+        Parameters
+        ----------
+        toCopy :  Layer
+            If provided, the new instance will be a clone of this instance.
+
+        kwargs.height : number
+            The Z height of the layer
+        kwargs.number : number
+            The layer number
+        """
         if args:
             toCopy = args[0]
-            assert isinstance(toCopy, self.__class__), "Expected a " + self.__class__ + " instance"
+            assert isinstance(toCopy, Layer), "Expected a Layer instance"
 
             self.height = toCopy.height
             self.number = toCopy.number
