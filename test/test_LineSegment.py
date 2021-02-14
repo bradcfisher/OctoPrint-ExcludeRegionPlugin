@@ -53,3 +53,32 @@ class LineSegmentTests(TestCase):
         """Test the constructor when passed non-keyword arguments."""
         with self.assertRaises(TypeError):
             LineSegment(1, 2, 3, 4)  # pylint: disable=too-many-function-args
+
+    def test_equal(self):
+        """Test the __eq__ method."""
+        # pylint: disable=invalid-name
+        a = LineSegment(x1=1, y1=2, x2=3, y2=4)
+        b = LineSegment(x1=1, y1=2, x2=3, y2=4)
+        c = LineSegment(x1=1, y1=2, x2=3, y2=0)
+        d = LineSegment(x1=1, y1=2, x2=0, y2=4)
+        e = LineSegment(x1=1, y1=0, x2=3, y2=4)
+        f = LineSegment(x1=0, y1=2, x2=3, y2=4)
+
+        self.assertTrue(a == b)
+        self.assertTrue(b == a)
+        self.assertFalse(a == c)
+        self.assertFalse(a == d)
+        self.assertFalse(a == e)
+        self.assertFalse(a == f)
+
+    def test_roundValues(self):
+        """Test the roundValues method."""
+        unit = LineSegment(x1=0.123456789, y1=1.123456789, x2=2.123456789, y2=3.123456789)
+
+        unit.roundValues(6)
+
+        self.assertEqual(
+            LineSegment(x1=0.123457, y1=1.123457, x2=2.123457, y2=3.123457),
+            unit,
+            "It should round the values"
+        )

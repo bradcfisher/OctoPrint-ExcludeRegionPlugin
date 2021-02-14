@@ -6,7 +6,7 @@ from __future__ import absolute_import, division
 import math
 
 from .CommonMixin import CommonMixin
-from .GeometryMixin import GeometryMixin
+from .GeometryMixin import GeometryMixin, ROUND_PLACES
 from .Rectangle import Rectangle
 
 
@@ -56,6 +56,21 @@ class LineSegment(CommonMixin, GeometryMixin):
 
         self.length = math.hypot(self.x1 - self.x2, self.y1 - self.y2)
         self.bounds = Rectangle(x1=self.x1, y1=self.y1, x2=self.x2, y2=self.y2)
+
+    def roundValues(self, numPlaces=ROUND_PLACES):
+        """Round all internal values."""
+        self.x1 = round(self.x1, numPlaces)
+        self.y1 = round(self.y1, numPlaces)
+        self.x2 = round(self.x2, numPlaces)
+        self.y2 = round(self.y2, numPlaces)
+        return self
+
+    def __eq__(self, other):
+        """Compare this object to another."""
+        return (
+            (self.x1 == other.x1) and (self.x2 == other.x2) and
+            (self.y1 == other.y1) and (self.y2 == other.y2)
+        )
 
     def __repr__(self):
         """

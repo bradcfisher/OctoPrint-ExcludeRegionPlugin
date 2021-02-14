@@ -6,10 +6,8 @@ from __future__ import absolute_import, division
 import math
 
 from .CommonMixin import CommonMixin
-from .GeometryMixin import GeometryMixin
+from .GeometryMixin import GeometryMixin, ROUND_PLACES
 from .Rectangle import Rectangle
-
-ROUND_PLACES = 7
 
 PI = math.pi
 TWO_PI = PI * 2
@@ -39,7 +37,7 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
     startAngle : float
         The starting angle of the arc, normalized to [0, 2pi)
     endAngle : float
-        The ending angle of the arc, normalized to [0, 2pi)
+        The ending angle of the arc, equivalent to startAngle + sweep (-2pi, 4pi)
     sweep : float
         The angular sweep of the arc, normalized to [-2pi, 2pi]
     length : float
@@ -247,11 +245,17 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
         self.sweep = float(kwargs.get("sweep", 0))
         if (self.sweep < 0):
             self.sweep = -normalize_radians(-self.sweep)
+            if (self.sweep == 0):
+                self.sweep = -TWO_PI
         else:
             self.sweep = normalize_radians(self.sweep)
-        if (self.sweep == 0):
-            self.sweep = TWO_PI
+            if (self.sweep == 0):
+                self.sweep = TWO_PI
 
+        self.compute()
+
+    def compute(self):
+        """Compute values for the properties derived from the initial inputs."""
         # Start point
         self.x1 = round(math.cos(self.startAngle) * self.radius + self.cx, ROUND_PLACES)
         self.y1 = round(math.sin(self.startAngle) * self.radius + self.cy, ROUND_PLACES)
@@ -268,18 +272,6 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
         self.length = abssweep * self.radius
 
         self.bounds = self.computeBounds()
-
-        # print(">> Arc: center     = ({}, {})".format(self.cx, self.cy))
-        # print(">>      radius     = {}".format(self.radius))
-        # print(">>      start      = ({}, {})".format(self.x1, self.y1))
-        # print(">>      end        = ({}, {})".format(self.x2, self.y2))
-        # print(">>      startAngle = {}".format(self.startAngle))
-        # print(">>      endAngle   = {}".format(self.endAngle))
-        # print(">>      sweep      = {}".format(self.sweep))
-        # print(">>      length     = {}".format(self.length))
-        # print(">>      clockwise  = {}".format(self.clockwise))
-        # print(">>      major      = {}".format(self.major))
-        # print(">>      bounds     = {}".format(self.bounds))
 
     def computeBounds(self):
         """
@@ -347,9 +339,41 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
 
         return angle
 
+    def containsAngle(self, angle):
+        """
+        Determine if the specified angle falls inside the range of the arc.
+
+        Returns
+        -------
+        boolean
+            True if the specified angle is in the range of the arc, False otherwise.
+        """
+        sweep = self.angleToSweep(angle)
+        return (sweep >= self.sweep) if (self.clockwise) else (sweep <= self.sweep)
+
+    def roundValues(self, numPlaces=ROUND_PLACES):
+        """Round internal values."""
+        self.cx = round(self.cx, numPlaces)
+        self.cy = round(self.cy, numPlaces)
+        self.radius = round(self.radius, numPlaces)
+        self.startAngle = round(self.startAngle, numPlaces)
+        self.sweep = round(self.sweep, numPlaces)
+        self.compute()
+        return self
+
+    def __eq__(self, other):
+        """Compare this object to another."""
+        return (
+            (self.cx == other.cx) and
+            (self.cy == other.cy) and
+            (self.radius == other.radius) and
+            (self.startAngle == other.startAngle) and
+            (self.sweep == other.sweep)
+        )
+
     def __repr__(self):
         """
-        Return a string representation of this LineSement.
+        Return a string representation of this Arc.
 
         Returns
         -------
@@ -359,3 +383,15 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
         return "{}[({}, {}) r={} start={} sweep={})]".format(
             self.__class__.__name__, self.cx, self.cy, self.radius, self.startAngle, self.sweep
         )
+
+        # print(">> Arc: center     = ({}, {})".format(self.cx, self.cy))
+        # print(">>      radius     = {}".format(self.radius))
+        # print(">>      start      = ({}, {})".format(self.x1, self.y1))
+        # print(">>      end        = ({}, {})".format(self.x2, self.y2))
+        # print(">>      startAngle = {}".format(self.startAngle))
+        # print(">>      endAngle   = {}".format(self.endAngle))
+        # print(">>      sweep      = {}".format(self.sweep))
+        # print(">>      length     = {}".format(self.length))
+        # print(">>      clockwise  = {}".format(self.clockwise))
+        # print(">>      major      = {}".format(self.major))
+        # print(">>      bounds     = {}".format(self.bounds))

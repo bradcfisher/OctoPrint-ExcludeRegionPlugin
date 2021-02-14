@@ -53,6 +53,36 @@ class ArcTests(TestCase):  # pylint: disable=too-many-public-methods
 
         self.assertProperties(unit, ArcTests.expectedProperties)
 
+    def test_constructor_counter_clockwise_circle(self):
+        """Test the constructor for a counterclockwise circle."""
+        unit = Arc(cx=1, cy=2, radius=3, startAngle=0, sweep=math.pi * 2)
+
+        self.assertIsInstance(unit, Arc)
+        self.assertEqual(unit.cx, 1, "cx should be 1")
+        self.assertEqual(unit.cy, 2, "cy should be 2")
+        self.assertEqual(unit.radius, 3, "radius should be 3")
+        self.assertEqual(unit.startAngle, 0, "startAngle should be 0")
+        self.assertEqual(unit.endAngle, math.pi * 2, "endAngle should be 2pi")
+        self.assertEqual(unit.sweep, math.pi * 2, "sweep should be 2pi")
+        self.assertEqual(unit.length, math.pi * 6, "length should be 6pi")
+        self.assertFalse(unit.clockwise, "clockwise should be false")
+        self.assertTrue(unit.major, "major should be true")
+
+    def test_constructor_clockwise_circle(self):
+        """Test the constructor for a clockwise circle."""
+        unit = Arc(cx=1, cy=2, radius=3, startAngle=0, sweep=-math.pi * 2)
+
+        self.assertIsInstance(unit, Arc)
+        self.assertEqual(unit.cx, 1, "cx should be 1")
+        self.assertEqual(unit.cy, 2, "cy should be 2")
+        self.assertEqual(unit.radius, 3, "radius should be 3")
+        self.assertEqual(unit.startAngle, 0, "startAngle should be 0")
+        self.assertEqual(unit.endAngle, -math.pi * 2, "endAngle should be -2pi")
+        self.assertEqual(unit.sweep, -math.pi * 2, "sweep should be -2pi")
+        self.assertEqual(unit.length, math.pi * 6, "length should be 6pi")
+        self.assertTrue(unit.clockwise, "clockwise should be true")
+        self.assertTrue(unit.major, "major should be true")
+
     def test_constructor_counter_clockwise_Q0(self):
         """Test the constructor for a counterclockwise arc in Q0."""
         unit = Arc(cx=1, cy=2, radius=3, startAngle=0.1, sweep=1)
@@ -830,3 +860,61 @@ class ArcTests(TestCase):  # pylint: disable=too-many-public-methods
         y2 = math.sin(endAngle)
         self.assertEqual(FloatAlmostEqual(x2), unit.x2, "The end point x should be " + repr(x2))
         self.assertEqual(FloatAlmostEqual(y2), unit.y2, "The end point y should be " + repr(y2))
+
+    def test_equal(self):
+        """Test the __eq__ method."""
+        # pylint: disable=invalid-name
+        a = Arc(cx=0, cy=1, radius=2, startAngle=3, sweep=4)
+        b = Arc(cx=0, cy=1, radius=2, startAngle=3, sweep=4)
+
+        c = Arc(cx=99, cy=1, radius=2, startAngle=3, sweep=4)
+        d = Arc(cx=0, cy=99, radius=2, startAngle=3, sweep=4)
+        e = Arc(cx=0, cy=1, radius=99, startAngle=3, sweep=4)
+        f = Arc(cx=0, cy=1, radius=2, startAngle=99, sweep=4)
+        g = Arc(cx=0, cy=1, radius=2, startAngle=3, sweep=99)
+
+        self.assertTrue(a == b)
+        self.assertTrue(b == a)
+        self.assertFalse(a == c)
+        self.assertFalse(a == d)
+        self.assertFalse(a == e)
+        self.assertFalse(a == f)
+        self.assertFalse(a == g)
+
+    def test_roundValues(self):
+        """Test the roundValues method."""
+        unit = Arc(
+            cx=4.123456789, cy=3.123456789, radius=2.123456789,
+            startAngle=1.123456789, sweep=0.123456789
+        )
+
+        unit.roundValues(6)
+
+        self.assertEqual(
+            Arc(
+                cx=4.123457, cy=3.123457, radius=2.123457,
+                startAngle=1.123457, sweep=0.123457
+            ),
+            unit,
+            "It should round the values"
+        )
+
+    def test_containsAngle_CW(self):
+        """Test containsAngle for a CW arc."""
+        unit = Arc(cx=0, cy=0, radius=1, startAngle=0, sweep=math.pi)
+
+        self.assertTrue(unit.containsAngle(0))
+        self.assertTrue(unit.containsAngle(-math.pi))
+        self.assertTrue(unit.containsAngle(math.pi))
+        self.assertFalse(unit.containsAngle(-math.pi / 2))
+        self.assertTrue(unit.containsAngle(math.pi / 2))
+
+    def test_containsAngle_CCW(self):
+        """Test containsAngle for a CCW arc."""
+        unit = Arc(cx=0, cy=0, radius=1, startAngle=0, sweep=-math.pi)
+
+        self.assertTrue(unit.containsAngle(0))
+        self.assertTrue(unit.containsAngle(-math.pi))
+        self.assertTrue(unit.containsAngle(math.pi))
+        self.assertTrue(unit.containsAngle(-math.pi / 2))
+        self.assertFalse(unit.containsAngle(math.pi / 2))
