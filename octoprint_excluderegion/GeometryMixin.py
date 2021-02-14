@@ -3,9 +3,9 @@
 
 from __future__ import absolute_import, division
 
-import math
+
+ROUND_PLACES = 7
+
 
 class GeometryMixin(object):
-    """
-    Mixin applied to all geometry.
-    """
+    """Mixin applied to geometry objects."""
