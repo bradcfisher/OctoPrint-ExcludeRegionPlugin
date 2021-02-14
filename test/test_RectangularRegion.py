@@ -56,26 +56,26 @@ class RectangularRegionTests(TestCase):
         with self.assertRaises(AssertionError):
             RectangularRegion("NotARectangularRegionInstance")
 
-    def test_containsPoint(self):
-        """Test the containsPoint method."""
+    def test_containsPoint3d(self):
+        """Test the containsPoint3d method."""
         unit = RectangularRegion(x1=0, y1=0, x2=10, y2=10, maxLayer=Layer(height=1, number=2))
 
-        self.assertTrue(unit.containsPoint(0, 0, 0), "it should contain [0, 0, 0]")
-        self.assertTrue(unit.containsPoint(10, 10, 0), "it should contain [10, 10, 0]")
-        self.assertTrue(unit.containsPoint(0, 10, 0), "it should contain [0, 10, 0]")
-        self.assertTrue(unit.containsPoint(10, 0, 0), "it should contain [10, 0, 0]")
+        self.assertTrue(unit.containsPoint3d(0, 0, 0), "it should contain [0, 0, 0]")
+        self.assertTrue(unit.containsPoint3d(10, 10, 0), "it should contain [10, 10, 0]")
+        self.assertTrue(unit.containsPoint3d(0, 10, 0), "it should contain [0, 10, 0]")
+        self.assertTrue(unit.containsPoint3d(10, 0, 0), "it should contain [10, 0, 0]")
 
-        self.assertTrue(unit.containsPoint(5, 5, 0), "it should contain [5, 5, 0]")
+        self.assertTrue(unit.containsPoint3d(5, 5, 0), "it should contain [5, 5, 0]")
 
-        self.assertFalse(unit.containsPoint(-1, 5, 0), "it should not contain [-1, 5, 0]")
-        self.assertFalse(unit.containsPoint(5, -1, 0), "it should not contain [5, -1, 0]")
-        self.assertFalse(unit.containsPoint(5, 11, 0), "it should not contain [5, 11, 0]")
-        self.assertFalse(unit.containsPoint(11, 5, 0), "it should not contain [11, 5, 0]")
+        self.assertFalse(unit.containsPoint3d(-1, 5, 0), "it should not contain [-1, 5, 0]")
+        self.assertFalse(unit.containsPoint3d(5, -1, 0), "it should not contain [5, -1, 0]")
+        self.assertFalse(unit.containsPoint3d(5, 11, 0), "it should not contain [5, 11, 0]")
+        self.assertFalse(unit.containsPoint3d(11, 5, 0), "it should not contain [11, 5, 0]")
 
-        self.assertFalse(unit.containsPoint(0, 0, 10), "it should not contain [0, 0, 10]")
-        self.assertFalse(unit.containsPoint(10, 10, 10), "it should not contain [10, 10, 10]")
-        self.assertFalse(unit.containsPoint(0, 10, 10), "it should not contain [0, 10, 10]")
-        self.assertFalse(unit.containsPoint(10, 0, 10), "it should not contain [10, 0, 10]")
+        self.assertFalse(unit.containsPoint3d(0, 0, 10), "it should not contain [0, 0, 10]")
+        self.assertFalse(unit.containsPoint3d(10, 10, 10), "it should not contain [10, 10, 10]")
+        self.assertFalse(unit.containsPoint3d(0, 10, 10), "it should not contain [0, 10, 10]")
+        self.assertFalse(unit.containsPoint3d(10, 0, 10), "it should not contain [10, 0, 10]")
 
     def test_containsRegion_Rectangular(self):
         """Test the containsRegion method when passed a RectangularRegion."""
