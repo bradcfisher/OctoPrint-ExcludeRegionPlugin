@@ -4,9 +4,10 @@
 from __future__ import absolute_import, division
 
 from .RegionMixin import RegionMixin
+from .Rectangle import Rectangle
 
 
-class RectangularRegion(RegionMixin):
+class RectangularRegion(Rectangle, RegionMixin):
     """
     A rectangular region to exclude from printing.
 
@@ -15,13 +16,13 @@ class RectangularRegion(RegionMixin):
     Attributes
     ----------
     x1 : float
-        The x coordinate of the left edge.  Expected to be <= x2.
+        The X coordinate of the left edge.  Expected to be <= x2.
     y1 : float
-        The y coordinate of the top edge.  Expected to be <= y2.
+        The Y coordinate of the top edge.  Expected to be <= y2.
     x2 : float
-        The x coordinate of the right edge.  Expected to be >= x1.
+        The X coordinate of the right edge.  Expected to be >= x1.
     y2 : float
-        The y coordinate of the bottom edge.  Expected to be >= y1.
+        The Y coordinate of the bottom edge.  Expected to be >= y1.
     id : string
         Unique identifier assigned to the region.
     minLayer : Layer
@@ -43,13 +44,13 @@ class RectangularRegion(RegionMixin):
             If provided, the new instance will be a clone of this instance.
 
         kwargs.x1 : float
-            The x coordinate of a vertical edge.
+            The X coordinate of a vertical edge.
         kwargs.y1 : float
-            The x coordinate of a horizontal edge.
+            The Y coordinate of a horizontal edge.
         kwargs.x2 : float
-            The x coordinate of a vertical edge.
+            The X coordinate of a vertical edge.
         kwargs.y2 : float
-            The x coordinate of a horizontal edge.
+            The Y coordinate of a horizontal edge.
         kwargs.id : string
             Unique identifier assigned to the region.
         kwargs.minLayer : Layer
@@ -62,31 +63,18 @@ class RectangularRegion(RegionMixin):
         # pylint: disable=invalid-name
         if args:
             toCopy = args[0]
-            assert isinstance(toCopy, self.__class__), "Expected a " + self.__class__ + " instance"
-
-            self.x1 = toCopy.x1
-            self.y1 = toCopy.y1
-            self.x2 = toCopy.x2
-            self.y2 = toCopy.y2
+            Rectangle.__init__(self, x1=toCopy.x1, y1=toCopy.y1, x2=toCopy.x2, y2=toCopy.y2)
             self.id = toCopy.id
         else:
-            x1 = float(kwargs.get("x1", 0))
-            y1 = float(kwargs.get("y1", 0))
-            x2 = float(kwargs.get("x2", 0))
-            y2 = float(kwargs.get("y2", 0))
+            Rectangle.__init__(
+                    self,
+                    x1=float(kwargs.get("x1", 0)),
+                    y1=float(kwargs.get("y1", 0)),
+                    x2=float(kwargs.get("x2", 0)),
+                    y2=float(kwargs.get("y2", 0))
+            )
 
-            if (x2 < x1):
-                x1, x2 = x2, x1
-
-            if (y2 < y1):
-                y1, y2 = y2, y1
-
-            self.x1 = x1
-            self.y1 = y1
-            self.x2 = x2
-            self.y2 = y2
-
-    def containsPoint(self, x, y, z):
+    def containsPoint3d(self, x, y, z):
         """
         Check if the specified point is contained in this region.
 
@@ -103,7 +91,7 @@ class RectangularRegion(RegionMixin):
         -------
         True if the point is inside this region, and False otherwise.
         """
-        return self.inHeightRange(z) and (x >= self.x1) and (x <= self.x2) and (y >= self.y1) and (y <= self.y2)
+        return self.inHeightRange(z) and self.containsPoint(x, y)
 
     def containsRegion(self, otherRegion):
         """
@@ -113,6 +101,7 @@ class RectangularRegion(RegionMixin):
         -------
         True if the other region is fully contained inside this region, and False otherwise.
         """
+        # pylint: disable=import-outside-toplevel
         from octoprint_excluderegion.CircularRegion import CircularRegion
 
         if (isinstance(otherRegion, RectangularRegion)):
@@ -122,12 +111,13 @@ class RectangularRegion(RegionMixin):
                 (otherRegion.y1 >= self.y1) and
                 (otherRegion.y2 <= self.y2)
             )
-        elif (isinstance(otherRegion, CircularRegion)):
+
+        if (isinstance(otherRegion, CircularRegion)):
             return (
                 (otherRegion.cx - otherRegion.r >= self.x1) and
                 (otherRegion.cx + otherRegion.r <= self.x2) and
                 (otherRegion.cy - otherRegion.r >= self.y1) and
                 (otherRegion.cy + otherRegion.r <= self.y2)
             )
-        else:
-            raise ValueError("unexpected type: {otherRegion}".format(otherRegion=otherRegion))
+
+        raise ValueError("unexpected type: {otherRegion}".format(otherRegion=otherRegion))
