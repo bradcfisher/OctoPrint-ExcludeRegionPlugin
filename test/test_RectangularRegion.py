@@ -123,40 +123,40 @@ class RectangularRegionTests(TestCase):
         unit = RectangularRegion(x1=0, y1=0, x2=10, y2=10)
 
         self.assertTrue(
-            unit.containsRegion(CircularRegion(cx=5, cy=5, r=1)),
+            unit.containsRegion(CircularRegion(cx=5, cy=5, radius=1)),
             "it should contain a CircularRegion inside"
         )
         self.assertTrue(
-            unit.containsRegion(CircularRegion(cx=1, cy=5, r=1)),
+            unit.containsRegion(CircularRegion(cx=1, cy=5, radius=1)),
             "it should contain a CircularRegion inside, but tangent to the left edge"
         )
         self.assertTrue(
-            unit.containsRegion(CircularRegion(cx=9, cy=5, r=1)),
+            unit.containsRegion(CircularRegion(cx=9, cy=5, radius=1)),
             "it should contain a CircularRegion inside, but tangent to the right edge"
         )
         self.assertTrue(
-            unit.containsRegion(CircularRegion(cx=5, cy=1, r=1)),
+            unit.containsRegion(CircularRegion(cx=5, cy=1, radius=1)),
             "it should contain a CircularRegion inside, but tangent to the bottom edge"
         )
         self.assertTrue(
-            unit.containsRegion(CircularRegion(cx=5, cy=9, r=1)),
+            unit.containsRegion(CircularRegion(cx=5, cy=9, radius=1)),
             "it should contain a CircularRegion inside, but tangent to the top edge"
         )
         self.assertTrue(
-            unit.containsRegion(CircularRegion(cx=5, cy=5, r=5)),
+            unit.containsRegion(CircularRegion(cx=5, cy=5, radius=5)),
             "it should contain a CircularRegion inside, but tangent to all edges"
         )
 
         self.assertFalse(
-            unit.containsRegion(CircularRegion(cx=5, cy=5, r=5.1)),
+            unit.containsRegion(CircularRegion(cx=5, cy=5, radius=5.1)),
             "it should not contain a CircularRegion that extends outside"
         )
         self.assertFalse(
-            unit.containsRegion(CircularRegion(cx=5, cy=5, r=10)),
+            unit.containsRegion(CircularRegion(cx=5, cy=5, radius=10)),
             "it should not contain a CircularRegion containing this region"
         )
         self.assertFalse(
-            unit.containsRegion(CircularRegion(cx=20, cy=20, r=1)),
+            unit.containsRegion(CircularRegion(cx=20, cy=20, radius=1)),
             "it should not contain a CircularRegion completely outside"
         )
 

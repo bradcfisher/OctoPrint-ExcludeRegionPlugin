@@ -241,6 +241,8 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
         self.cx = float(kwargs.get("cx", 0))
         self.cy = float(kwargs.get("cy", 0))
         self.radius = float(kwargs.get("radius", 1))
+        if (self.radius <= 0):
+            raise ValueError("The radius must be greater than 0")
         self.startAngle = normalize_radians(float(kwargs.get("startAngle", 0)))
         self.sweep = float(kwargs.get("sweep", 0))
         if (self.sweep < 0):
@@ -380,7 +382,7 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
         string
             String representation, such as "Arc[(1, 2) r=5 start=0.4 sweep=1]".
         """
-        return "{}[({}, {}) r={} start={} sweep={})]".format(
+        return "{}[({}, {}) radius={} startAngle={} sweep={})]".format(
             self.__class__.__name__, self.cx, self.cy, self.radius, self.startAngle, self.sweep
         )
 

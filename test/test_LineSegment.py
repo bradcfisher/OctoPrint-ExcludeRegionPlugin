@@ -82,3 +82,15 @@ class LineSegmentTests(TestCase):
             unit,
             "It should round the values"
         )
+
+    def test_pointInSegment(self):
+        """Test pointInSegment when the point is to the left."""
+        unit = LineSegment(x1=0, y1=0, x2=1, y2=1)
+        
+        self.assertTrue(unit.pointInSegment(0, 0))       # p1
+        self.assertTrue(unit.pointInSegment(1, 1))       # p2
+        self.assertTrue(unit.pointInSegment(0.5, 0.5))   # inside
+
+        self.assertFalse(unit.pointInSegment(-1, -1))    # left
+        self.assertFalse(unit.pointInSegment(2, 2))      # right
+        self.assertFalse(unit.pointInSegment(0.5, 0.25)) # not colinear

@@ -64,7 +64,6 @@ class RectangularRegion(Rectangle, RegionMixin):
         if args:
             toCopy = args[0]
             Rectangle.__init__(self, x1=toCopy.x1, y1=toCopy.y1, x2=toCopy.x2, y2=toCopy.y2)
-            self.id = toCopy.id
         else:
             Rectangle.__init__(
                     self,
@@ -114,10 +113,10 @@ class RectangularRegion(Rectangle, RegionMixin):
 
         if (isinstance(otherRegion, CircularRegion)):
             return (
-                (otherRegion.cx - otherRegion.r >= self.x1) and
-                (otherRegion.cx + otherRegion.r <= self.x2) and
-                (otherRegion.cy - otherRegion.r >= self.y1) and
-                (otherRegion.cy + otherRegion.r <= self.y2)
+                (otherRegion.cx - otherRegion.radius >= self.x1) and
+                (otherRegion.cx + otherRegion.radius <= self.x2) and
+                (otherRegion.cy - otherRegion.radius >= self.y1) and
+                (otherRegion.cy + otherRegion.radius <= self.y2)
             )
 
         raise ValueError("unexpected type: {otherRegion}".format(otherRegion=otherRegion))

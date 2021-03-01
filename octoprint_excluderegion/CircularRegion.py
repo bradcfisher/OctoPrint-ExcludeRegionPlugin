@@ -6,9 +6,10 @@ from __future__ import absolute_import, division
 import math
 
 from .RegionMixin import RegionMixin
+from .Circle import Circle
 
 
-class CircularRegion(RegionMixin):
+class CircularRegion(Circle, RegionMixin):
     """
     A circular region to exclude from printing.
 
@@ -18,7 +19,7 @@ class CircularRegion(RegionMixin):
         The x coordinate of the region's center point.
     cy : float
         The y coordinate of the region's center point.
-    r : float
+    radius : float
         The radius of the region.
     id : string
         Unique identifier assigned to the region.
@@ -41,7 +42,7 @@ class CircularRegion(RegionMixin):
             The x coordinate of the region's center point.
         kwargs.cy : float
             The y coordinate of the region's center point.
-        kwargs.r : float
+        kwargs.radius : float
             The radius of the region.
         kwargs.id : float
             Unique identifier assigned to the region.
@@ -51,25 +52,23 @@ class CircularRegion(RegionMixin):
             The maximum layer at which this region should be enforced.  Default is None.
         """
         RegionMixin.__init__(self, *args, **kwargs)
-        
+
         # pylint: disable=invalid-name
         if args:
             toCopy = args[0]
-            assert isinstance(toCopy, self.__class__), "Expected a " + self.__class__ + " instance"
-
-            self.cx = toCopy.cx
-            self.cy = toCopy.cy
-            self.r = toCopy.r
-            self.id = toCopy.id
+            Circle.__init__(self, cx=toCopy.cx, cy=toCopy.cy, radius=toCopy.radius)
         else:
-            self.cx = float(kwargs.get("cx", 0))
-            self.cy = float(kwargs.get("cy", 0))
-            self.r = float(kwargs.get("r", 0))
+            Circle.__init__(
+                    self,
+                    cx=float(kwargs.get("cx", 0)),
+                    cy=float(kwargs.get("cy", 0)),
+                    radius=float(kwargs.get("radius", 1))
+            )
 
     # pylint: disable=invalid-name
-    def containsPoint(self, x, y, z):
+    def containsPoint3d(self, x, y, z):
         """
-        Check if the specified point is contained in this region.
+        Check if the specified 3D point is contained in this region.
 
         Parameters
         ----------
@@ -84,7 +83,7 @@ class CircularRegion(RegionMixin):
         -------
         True if the point is inside this region, and False otherwise.
         """
-        return self.inHeightRange(z) and self.r >= math.hypot(x - self.cx, y - self.cy)
+        return self.inHeightRange(z) and self.containsPoint(x, y)
 
     def containsRegion(self, otherRegion):
         """
@@ -97,15 +96,9 @@ class CircularRegion(RegionMixin):
         from octoprint_excluderegion.RectangularRegion import RectangularRegion
 
         if (isinstance(otherRegion, RectangularRegion)):
-            z = self.getMinHeight()
-            return (
-                self.containsPoint(otherRegion.x1, otherRegion.y1, z) and
-                self.containsPoint(otherRegion.x2, otherRegion.y1, z) and
-                self.containsPoint(otherRegion.x2, otherRegion.y2, z) and
-                self.containsPoint(otherRegion.x1, otherRegion.y2, z)
-            )
+            return self.containsRect(otherRegion)
         elif (isinstance(otherRegion, CircularRegion)):
-            dist = math.hypot(self.cx - otherRegion.cx, self.cy - otherRegion.cy) + otherRegion.r
-            return (dist <= self.r)
+            dist = math.hypot(self.cx - otherRegion.cx, self.cy - otherRegion.cy) + otherRegion.radius
+            return (dist <= self.radius)
         else:
             raise ValueError("unexpected type: {otherRegion}".format(otherRegion=otherRegion))

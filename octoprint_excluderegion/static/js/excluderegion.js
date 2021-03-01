@@ -184,25 +184,25 @@ $(function() {
     writable: true });
   self.RectangularRegion = RectangularRegion;
 
-  function CircularRegion(cx, cy, r, minLayer, maxLayer, id) {
+  function CircularRegion(cx, cy, radius, minLayer, maxLayer, id) {
     var self = this;
 
     if (arguments.length == 1) {
       Region.call(self, "CircularRegion", cx.minLayer, cx.maxLayer, cx.id);
       self.cx = cx.cx;
       self.cy = cx.cy;
-      self.r = cx.r;
+      self.radius = cx.radius;
     } else {
       Region.call(self, "CircularRegion", minLayer, maxLayer, id);
       self.cx = cx;
       self.cy = cy;
-      self.r = r;
+      self.radius = radius;
     }
 
     self.getBounds = function() {
       return {
-        x1: self.cx - self.r, y1: self.cy - self.r,
-        x2: self.cx + self.r, y2: self.cy + self.r
+        x1: self.cx - self.radius, y1: self.cy - self.radius,
+        x2: self.cx + self.radius, y2: self.cy + self.radius
       };
     }
     
@@ -216,10 +216,10 @@ $(function() {
       var dist = Math.hypot(dx, dy);
 
       var rval = 0;
-      if (dist <= self.r + range) {
-        if (dist <= self.r) rval = INSIDE;
+      if (dist <= self.radius + range) {
+        if (dist <= self.radius) rval = INSIDE;
 
-        if (range && (dist >= self.r - range)) {
+        if (range && (dist >= self.radius - range)) {
           // Determine border piece by angle
           var border = [ RIGHT, BOTTOM | RIGHT, BOTTOM, BOTTOM | LEFT, LEFT, TOP | LEFT, TOP, TOP | RIGHT ];
 
@@ -238,15 +238,15 @@ $(function() {
     }
 
     self.containsPoint = function(pt) {
-      return Math.hypot(self.cx - pt.x, self.cy - pt.y) <= self.r;
+      return Math.hypot(self.cx - pt.x, self.cy - pt.y) <= self.radius;
     }
 
     self.renderPath = function(ctx, forStroke) {
-      var r = self.r;
-      if (forStroke) r -= ctx.lineWidth / 2;
-      if (r >= 0) {
-        ctx.moveTo(self.cx + r, self.cy);
-        ctx.arc(self.cx, self.cy, r, 0, Math.PI * 2);
+      var radius = self.radius;
+      if (forStroke) radius -= ctx.lineWidth / 2;
+      if (radius >= 0) {
+        ctx.moveTo(self.cx + radius, self.cy);
+        ctx.arc(self.cx, self.cy, radius, 0, Math.PI * 2);
         ctx.closePath();
       }
     }
@@ -591,7 +591,7 @@ $(function() {
           selectedRegion.x2 = pt.x;
           selectedRegion.y2 = pt.y;
         } else if (selectedRegion instanceof CircularRegion) {
-          selectedRegion.r = Math.hypot(
+          selectedRegion.radius = Math.hypot(
             pt.x - selectedRegion.cx,
             pt.y - selectedRegion.cy
           );
@@ -684,11 +684,11 @@ $(function() {
             }
           } else if (selectedRegion instanceof CircularRegion) {
             // Compute new size
-            var r = Math.hypot(pt.x - selectedRegion.cx, pt.y - selectedRegion.cy);
+            var radius = Math.hypot(pt.x - selectedRegion.cx, pt.y - selectedRegion.cy);
             if (!isFullEditingEnabled)
-              r = Math.max(r, relatedRegion.r);
+              radius = Math.max(radius, relatedRegion.radius);
 
-            selectedRegion.r = r;
+            selectedRegion.radius = radius;
           } else {
             throw new ArgumentError("Unsupported selectedRegionType: "+ selectedRegionType);
           }

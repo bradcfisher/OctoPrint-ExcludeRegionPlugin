@@ -27,6 +27,16 @@ class ArcTests(TestCase):  # pylint: disable=too-many-public-methods
         with self.assertRaises(TypeError):
             Arc(1, 2, 3, 4)  # pylint: disable=too-many-function-args
 
+    def test_constructor_zero_radius(self):
+        """Test the constructor when passed a radius of zero."""
+        with self.assertRaises(ValueError):
+            Arc(cx=0, cy=0, radius=0, startAngle=0, sweep=1)
+
+    def test_constructor_negative_radius(self):
+        """Test the constructor when passed a negative radius."""
+        with self.assertRaises(ValueError):
+            Arc(cx=0, cy=0, radius=-1, startAngle=0, sweep=1)
+
     def test_default_constructor(self):
         """Test the constructor when passed no arguments."""
         unit = Arc()

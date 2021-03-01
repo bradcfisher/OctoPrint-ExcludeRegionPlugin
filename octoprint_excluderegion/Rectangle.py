@@ -76,7 +76,6 @@ class Rectangle(CommonMixin, GeometryMixin):
         """
         GeometryMixin.__init__(self)
 
-        # p y lint: disable=invalid-name
         self.x1 = float(kwargs.get("x1", 0))
         self.y1 = float(kwargs.get("y1", 0))
         self.x2 = float(kwargs.get("x2", 0))
@@ -238,6 +237,11 @@ class Rectangle(CommonMixin, GeometryMixin):
         """
         Test whether another Rectangle intersects with this Rectangle.
 
+        Parameters
+        ----------
+        rect : Rectangle
+            The rectangle to test
+
         Returns
         -------
         boolean
@@ -250,6 +254,11 @@ class Rectangle(CommonMixin, GeometryMixin):
         """
         Test whether another Rectangle is fully contained inside this Rectangle.
 
+        Parameters
+        ----------
+        rect : Rectangle
+            The rectangle to test
+
         Returns
         -------
         boolean
@@ -261,6 +270,13 @@ class Rectangle(CommonMixin, GeometryMixin):
     def containsPoint(self, x, y):
         """
         Test whether a point is contained in this Rectangle.
+
+        Parameters
+        ----------
+        x : float
+            The x component of the point to test
+        y : float
+            The y component of the point to test
 
         Returns
         -------
@@ -361,11 +377,10 @@ class Rectangle(CommonMixin, GeometryMixin):
 
         Returns
         -------
-        Returns a list containing 0, 1 or 2 Arcs.  When the Arc is completely contained in
+        Returns a list containing 0 to 5 Arcs.  When the Arc is completely contained in
         this region, the list will be empty.  If the Arc and region do not overlap at all,
-        or one end of the Arc is inside this region, then a single Arc is returned.  If the
-        Arc and region overlap, but both ends of the Arc fall outside the region, then two
-        Arcs are returned.
+        then the original Arc is returned.  If the Arc and region overlap, but some of the
+        arc falls outside the region, the returned list will contain 1 to 5 arcs.
         """
         if (not self.intersectsRect(arc.bounds)):
             return [arc]    # Completely outside the region

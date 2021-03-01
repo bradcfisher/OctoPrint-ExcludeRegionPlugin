@@ -6,7 +6,7 @@ from __future__ import absolute_import, division
 import math
 
 from .CommonMixin import CommonMixin
-from .GeometryMixin import GeometryMixin, ROUND_PLACES
+from .GeometryMixin import GeometryMixin, ROUND_PLACES, EPSILON
 from .Rectangle import Rectangle
 
 
@@ -64,6 +64,28 @@ class LineSegment(CommonMixin, GeometryMixin):
         self.x2 = round(self.x2, numPlaces)
         self.y2 = round(self.y2, numPlaces)
         return self
+
+    # https://stackoverflow.com/questions/328107/how-can-you-determine-a-point-is-between-two-other-points-on-a-line-segment
+    def pointInSegment(self, x, y, epsilon=EPSILON):
+        # Check that the point is colinear with the segment
+        dx = (self.x2 - self.x1)
+        dy = (self.y2 - self.y1)
+
+        dcay = (y - self.y1)
+        dcax = (x - self.x1)
+
+        crossproduct = dcay * dx - dcax * dy
+        if abs(crossproduct) > epsilon:
+            return False
+
+        # Check that the point falls between the start and end of the segment
+        dotproduct = dcax * dx + dcay * dy
+
+        if dotproduct < 0:
+            return False
+
+        squaredlengthba = dx*dx + dy*dy
+        return (dotproduct <= squaredlengthba)
 
     def __eq__(self, other):
         """Compare this object to another."""

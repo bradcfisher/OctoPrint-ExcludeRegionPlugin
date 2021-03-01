@@ -302,7 +302,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
              "type" : "CircularRegion",
              "cx" : 1,
              "cy" : 1,
-             "r" : 1
+             "radius" : 1
            }
 
         /api/plugin/excluderegion/updateExcludeRegion
@@ -319,7 +319,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
              "type" : "CircularRegion",
              "cx" : 2,
              "cy" : 2,
-             "r" : 1
+             "radius" : 1
            }
 
         /api/plugin/excluderegion/deleteExcludeRegion
@@ -383,7 +383,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
                {
                  "type": "CircularRegion",
                  "id": "...uuid...",
-                 "cx": 1, "cy": 1, "r": 2
+                 "cx": 1, "cy": 1, "radius": 2
                }
                // etc ...
              ]
@@ -590,7 +590,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
                {
                  "type": "CircularRegion",
                  "id": "...uuid...",
-                 "cx": 1, "cy": 1, "r": 2
+                 "cx": 1, "cy": 1, "radius": 2
                }
                // etc ...
              ]
