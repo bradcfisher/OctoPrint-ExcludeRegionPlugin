@@ -4,9 +4,12 @@
 from __future__ import absolute_import
 
 import mock
+import math
 
 from octoprint_excluderegion.GcodeHandlers import GcodeHandlers, INCH_TO_MM_FACTOR
 from octoprint_excluderegion.RetractionState import RetractionState
+from octoprint_excluderegion.Arc import Arc
+from octoprint_excluderegion.LineSegment import LineSegment
 
 from .utils import TestCase
 
@@ -106,11 +109,16 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
         expectedResult = ["Command1"]
 
         unit = self._createInstance()
-        unit.state.processLinearMoves.return_value = expectedResult
+        unit.state.processMove.return_value = expectedResult
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
         result = unit._handle_G0("G0", "G0", None)  # pylint: disable=protected-access
 
-        unit.state.processLinearMoves.assert_called_with("G0", None, None, None, None, None)
+        unit.state.processMove.assert_called_with(
+            "G0", None, None, LineSegment(x1=0, y1=0, x2=0, y2=0), None, None, None
+        )
         self.assertEqual(result, expectedResult, "A list of one command should be returned")
 
     def test_handle_G0_nonFloatArgValue(self):
@@ -118,12 +126,15 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
         expectedResult = ["Command1"]
 
         unit = self._createInstance()
-        unit.state.processLinearMoves.return_value = expectedResult
+        unit.state.processMove.return_value = expectedResult
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
         result = unit._handle_G0("G0 X. Y-. Z", "G0", None)  # pylint: disable=protected-access
 
-        unit.state.processLinearMoves.assert_called_with(
-            "G0 X. Y-. Z", None, None, None, None, None
+        unit.state.processMove.assert_called_with(
+            "G0 X. Y-. Z", None, None, LineSegment(x1=0, y1=0, x2=0, y2=0), None, None, None
         )
         self.assertEqual(result, expectedResult, "A list of one command should be returned")
 
@@ -132,11 +143,16 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
         expectedResult = ["Command1"]
 
         unit = self._createInstance()
-        unit.state.processLinearMoves.return_value = expectedResult
+        unit.state.processMove.return_value = expectedResult
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
         result = unit._handle_G0("G0 S1", "G0", None)  # pylint: disable=protected-access
 
-        unit.state.processLinearMoves.assert_called_with("G0 S1", None, None, None, None, None)
+        unit.state.processMove.assert_called_with(
+            "G0 S1", None, None, LineSegment(x1=0, y1=0, x2=0, y2=0), None, None, None
+        )
         self.assertEqual(result, expectedResult, "A list of one command should be returned")
 
     def test_handle_G0_allEfxyzArgs(self):
@@ -144,7 +160,10 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
         expectedResult = ["Command1", "Command2"]
 
         unit = self._createInstance()
-        unit.state.processLinearMoves.return_value = expectedResult
+        unit.state.processMove.return_value = expectedResult
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
         result = unit._handle_G0(  # pylint: disable=protected-access
             "G0 E1 F2 X3 Y4 Z5",
@@ -152,20 +171,25 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
             None
         )
 
-        unit.state.processLinearMoves.assert_called_with(
+        unit.state.processMove.assert_called_with(
             "G0 E1 F2 X3 Y4 Z5",
-            1, 2, 5, 3, 4
+            1, 2, LineSegment(x1=0, y1=0, x2=3, y2=4), 3, 4, 5
         )
         self.assertEqual(result, expectedResult, "A list of two commands should be returned")
 
     def test_handle_G0_argCaseInsensitive(self):
         """Test the _handle_G0 method to ensure arguments are not case-sensitive."""
         unit = self._createInstance()
-        unit.state.processLinearMoves.return_value = "expected"
+        unit.state.processMove.return_value = "expected"
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
         result = unit._handle_G0("G0 e1 f2", "G0", None)  # pylint: disable=protected-access
 
-        unit.state.processLinearMoves.assert_called_with("G0 e1 f2", 1, 2, None, None, None)
+        unit.state.processMove.assert_called_with(
+            "G0 e1 f2", 1, 2, LineSegment(x1=0, y1=0, x2=0, y2=0), None, None, None
+        )
 
         self.assertEqual(result, "expected", "The result of processLinearMoves should be returned")
 
@@ -190,13 +214,22 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
     def test_handle_G2_argCaseInsensitive(self):
         """Test the _handle_G2 method to ensure arguments are not case-sensitive."""
         unit = self._createInstance()
-        with mock.patch.object(unit, 'computeArcCenterOffsets') as mockComputeArcCenterOffsets:
-            mockComputeArcCenterOffsets.return_value = (0, 0)
 
-            result = unit._handle_G2("G2 r30 x1 y2", "G2", None)  # pylint: disable=protected-access
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 30
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
+        
+        expectedResult = ["Command1"]
+        unit.state.processMove.return_value = expectedResult
 
-            mockComputeArcCenterOffsets.assert_called_with(1, 2, 30, True)
-            self.assertIsNone(result, "The result should be None")
+        result = unit._handle_G2("G2 r30 x30 y0", "G2", None)  # pylint: disable=protected-access
+
+        unit.state.processMove.assert_called_with(
+            "G2 r30 x30 y0", None, None,
+            Arc(cx=0, cy=0, radius=30, startAngle=math.pi/2, sweep=-math.pi/2),
+            30, 0, 0
+        )
+        self.assertEqual(result, expectedResult, "The expected result should be returned")
 
     def test_handle_G2_nonFloatArgValue(self):
         """Test the _handle_G2 method when a non float value is provided for an argument."""
@@ -205,67 +238,71 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
         unit.state.position.X_AXIS.nativeToLogical.return_value = 10
         unit.state.position.Y_AXIS.nativeToLogical.return_value = 20
 
-        with mock.patch.object(unit, 'computeArcCenterOffsets') as mockComputeArcCenterOffsets:
-            mockComputeArcCenterOffsets.return_value = (0, 0)
+        result = unit._handle_G2("G2 R30 X Y.", "G2", None)  # pylint: disable=protected-access
 
-            result = unit._handle_G2("G2 R30 X Y.", "G2", None)  # pylint: disable=protected-access
-
-            mockComputeArcCenterOffsets.assert_called_with(10, 20, 30, True)
-            self.assertIsNone(result, "The result should be None")
+        unit.state.processMove.assert_not_called()
+        self.assertIsNone(result, "The result should be None")
 
     def test_handle_G0_nonXyzefrijArg(self):
         """Test the _handle_G0 method when a non X/Y/Z/E/F/R/I/J argument is provided."""
         unit = self._createInstance()
 
-        with mock.patch.object(unit, 'computeArcCenterOffsets') as mockComputeArcCenterOffsets:
-            mockComputeArcCenterOffsets.return_value = (0, 0)
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 10
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 20
 
-            result = unit._handle_G2("G2 R30 s1", "G2", None)  # pylint: disable=protected-access
+        result = unit._handle_G2("G2 R30 s1", "G2", None)  # pylint: disable=protected-access
 
-            mockComputeArcCenterOffsets.assert_called_with(mock.ANY, mock.ANY, 30, True)
-
-            self.assertIsNone(result, "The result should be None")
+        self.assertIsNone(result, "The result should be None")
 
     def test_handle_G2_clockwise(self):
         """Test the _handle_G2 method creates clockwise arcs when passed a G2 command."""
         unit = self._createInstance()
 
-        with mock.patch.object(unit, 'computeArcCenterOffsets') as mockComputeArcCenterOffsets:
-            mockComputeArcCenterOffsets.return_value = (0, 0)
+        expectedResult = ["Command1"]
+        unit.state.processMove.return_value = expectedResult
 
-            result = unit._handle_G2("G2 R30", "G2", None)  # pylint: disable=protected-access
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
-            mockComputeArcCenterOffsets.assert_called_with(mock.ANY, mock.ANY, mock.ANY, True)
+        result = unit._handle_G2("G2 R30 X30 Y30", "G2", None)  # pylint: disable=protected-access
 
-            self.assertIsNone(result, "The result should be None")
+        unit.state.processMove.assert_called_with(
+            "G2 R30 X30 Y30", None, None,
+            Arc(cx=30, cy=0, radius=30, startAngle=math.pi, sweep=-math.pi / 2),
+            30, 30, 0
+        )
+
+        self.assertEqual(result, expectedResult, "The expected result should be returned")
 
     def test_handle_G2_counterClockwise(self):
         """Test the _handle_G2 method creates counter-clockwise arcs when passed a G3 command."""
         unit = self._createInstance()
 
-        with mock.patch.object(unit, 'computeArcCenterOffsets') as mockComputeArcCenterOffsets:
-            mockComputeArcCenterOffsets.return_value = (0, 0)
+        expectedResult = ["Command1"]
+        unit.state.processMove.return_value = expectedResult
 
-            result = unit._handle_G2("G3 R30", "G3", None)  # pylint: disable=protected-access
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
-            mockComputeArcCenterOffsets.assert_called_with(mock.ANY, mock.ANY, mock.ANY, False)
+        result = unit._handle_G2("G3 R30 X30 Y30", "G3", None)  # pylint: disable=protected-access
 
-            self.assertIsNone(result, "The result should be None")
+        unit.state.processMove.assert_called_with(
+            "G3 R30 X30 Y30", None, None,
+            Arc(cx=0, cy=30, radius=30, startAngle=math.pi * 1.5, sweep=math.pi / 2),
+            30, 30, 0
+        )
+
+        self.assertEqual(result, expectedResult, "The expected result should be returned")
 
     def test_handle_G2_zeroRadius(self):
         """Test the _handle_G2 method ignores the command when passed a zero radius."""
         unit = self._createInstance()
 
-        unit.computeArcCenterOffsets = mock.Mock(
-            name="computeArcCenterOffsets",
-            wraps=unit.computeArcCenterOffsets
-        )
-        unit.planArc = mock.Mock(name="planArc", wraps=unit.planArc)
-
         result = unit._handle_G2("G2 R0 X10 Y20", "G2", None)  # pylint: disable=protected-access
 
-        unit.computeArcCenterOffsets.assert_called_with(10, 20, 0, True)
-        unit.planArc.assert_not_called()
+        unit.state.processMove.assert_not_called()
         self.assertIsNone(result, "The result should be None")
 
     def test_handle_G2_radius_invalidEndPoint(self):
@@ -275,121 +312,102 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
         unit.state.position.X_AXIS.nativeToLogical.return_value = 10
         unit.state.position.Y_AXIS.nativeToLogical.return_value = 20
 
-        unit.computeArcCenterOffsets = mock.Mock(
-            name="computeArcCenterOffsets",
-            wraps=unit.computeArcCenterOffsets
-        )
-
-        unit.planArc = mock.Mock(name="planArc", wraps=unit.planArc)
-
         result = unit._handle_G2("G2 R30", "G2", None)  # pylint: disable=protected-access
 
-        unit.computeArcCenterOffsets.assert_called_with(10, 20, 30, True)
-        unit.planArc.assert_not_called()
+        unit.state.processMove.assert_not_called()
         self.assertIsNone(result, "The result should be None")
 
     def test_handle_G2_negativeRadius(self):
         """Test the _handle_G2 method correctly parses a negative radius value."""
         unit = self._createInstance()
 
-        with mock.patch.object(unit, 'computeArcCenterOffsets') as mockComputeArcCenterOffsets:
-            mockComputeArcCenterOffsets.return_value = (0, 0)
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 12
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
+        
+        expectedResult = ["Command1"]
+        unit.state.processMove.return_value = expectedResult
 
-            result = unit._handle_G2(  # pylint: disable=protected-access
-                "G2 R-12 X8 Y0",
-                "G2",
-                None
-            )
+        result = unit._handle_G2(  # pylint: disable=protected-access
+            "G2 R-12 X12 Y0",
+            "G2",
+            None
+        )
 
-            mockComputeArcCenterOffsets.assert_called_with(8, 0, -12, True)
+        unit.state.processMove.assert_called_with(
+            "G2 R-12 X12 Y0", None, None,
+            Arc(cx=12, cy=12, radius=12, startAngle=math.pi, sweep=-math.pi * 1.5),
+            12, 0, 0
+        )
 
-            self.assertIsNone(result, "The result should be None")
+        self.assertEqual(result, expectedResult, "A list of one command should be returned")
 
     def test_handle_G2_radiusTrumpsOffsets(self):
         """Test the _handle_G2 method to ensure offsets (I, J) are ignored if a radius is given."""
         unit = self._createInstance()
 
-        with mock.patch.multiple(
-            unit,
-            computeArcCenterOffsets=mock.DEFAULT,
-            planArc=mock.DEFAULT
-        ) as mocks:
-            expectedResult = ["Command1"]
-            unit.state.processLinearMoves.return_value = expectedResult
-            mocks["computeArcCenterOffsets"].return_value = (12, 13)
-            mocks["planArc"].return_value = [0, 1, 2, 3]
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 20
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
-            result = unit._handle_G2(  # pylint: disable=protected-access
-                "G2 R20 I8 J9 X10 Y0",
-                "G2",
-                None
-            )
+        expectedResult = ["Command1"]
+        unit.state.processMove.return_value = expectedResult
 
-            mocks["computeArcCenterOffsets"].assert_called_with(10, 0, 20, True)
-            mocks["planArc"].assert_called_with(10, 0, 12, 13, True)
+        result = unit._handle_G2(  # pylint: disable=protected-access
+            "G2 R20 I8 J9 X20 Y0",
+            "G2",
+            None
+        )
+        
+        unit.state.processMove.assert_called_with(
+            "G2 R20 I8 J9 X20 Y0", None, None,
+            Arc(cx=0, cy=0, radius=20, startAngle=math.pi/2, sweep=-math.pi/2),
+            20, 0, 0
+        )
 
-            self.assertEqual(result, expectedResult, "A list of one command should be returned")
+        self.assertEqual(result, expectedResult, "A list of one command should be returned")
 
     def test_handle_G2_noRadiusOrCenterOffset(self):
         """Test the _handle_G2 method when no radius or center offsets are passed."""
         unit = self._createInstance()
 
-        with mock.patch.multiple(
-            unit,
-            computeArcCenterOffsets=mock.DEFAULT,
-            planArc=mock.DEFAULT
-        ) as mocks:
-            result = unit._handle_G2("G2 X10 Y0", "G2", None)  # pylint: disable=protected-access
+        result = unit._handle_G2("G2 X10 Y0", "G2", None)  # pylint: disable=protected-access
 
-            mocks["computeArcCenterOffsets"].assert_not_called()
-            mocks["planArc"].assert_not_called()
-
-            self.assertIsNone(result, "The result should be None")
+        unit.state.processMove.assert_not_called()
+        self.assertIsNone(result, "The result should be None")
 
     def test_handle_G2_invalidCenterOffset(self):
         """Test the _handle_G2 method when passed an invalid center point offset (I=0, J=0)."""
         unit = self._createInstance()
 
-        with mock.patch.multiple(
-            unit,
-            computeArcCenterOffsets=mock.DEFAULT,
-            planArc=mock.DEFAULT
-        ) as mocks:
-            result = unit._handle_G2(  # pylint: disable=protected-access
-                "G2 I0 J0 X10 Y0",
-                "G2",
-                None
-            )
+        result = unit._handle_G2(  # pylint: disable=protected-access
+            "G2 I0 J0 X10 Y0",
+            "G2",
+            None
+        )
 
-            mocks["computeArcCenterOffsets"].assert_not_called()
-            mocks["planArc"].assert_not_called()
-
-            self.assertIsNone(result, "The result should be None")
+        unit.state.processMove.assert_not_called()
+        self.assertIsNone(result, "The result should be None")
 
     def test_handle_G2_radiusMode_paramParsing(self):
         """Test _handle_G2 parameter parsing when a radius is provided."""
         unit = self._createInstance()
 
         unit.state.position.X_AXIS.nativeToLogical.return_value = 0
-        unit.state.position.X_AXIS.nativeToLogical.return_value = 1
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 1
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
         expectedResult = ["Command1", "Command2"]
-        unit.state.processLinearMoves.return_value = expectedResult
+        unit.state.processMove.return_value = expectedResult
 
-        with mock.patch.multiple(
-            unit,
-            computeArcCenterOffsets=mock.DEFAULT,
-            planArc=mock.DEFAULT
-        ) as mocks:
-            mocks["computeArcCenterOffsets"].return_value = (2, 3)
-            mocks["planArc"].return_value = [4, 5]
+        cmd = "G2 R6 X0 Y-11 Z9 E10 F11"
+        result = unit._handle_G2(cmd, "G2", None)  # pylint: disable=protected-access
 
-            cmd = "G2 R6 X7 Y8 Z9 E10 F11"
-            result = unit._handle_G2(cmd, "G2", None)  # pylint: disable=protected-access
-
-            mocks["computeArcCenterOffsets"].assert_called_with(7, 8, 6, True)
-            mocks["planArc"].assert_called_with(7, 8, 2, 3, True)
-            unit.state.processLinearMoves.assert_called_with(cmd, 10, 11, 9, 4, 5)
+        unit.state.processMove.assert_called_with(
+            cmd, 10, 11,
+            Arc(cx=0, cy=-5, radius=6, startAngle=math.pi / 2, sweep=-math.pi),
+            0, -11, 9
+        )
 
         self.assertEqual(result, expectedResult, "A list of two commands should be returned")
 
@@ -397,27 +415,23 @@ class GcodeHandlersTests(TestCase):  # pylint: disable=too-many-public-methods
         """Test _handle_G2 parameter parsing when center point offsets are provided."""
         unit = self._createInstance()
 
-        unit.state.position.X_AXIS.nativeToLogical.return_value = 0
-        unit.state.position.X_AXIS.nativeToLogical.return_value = 1
+        unit.state.position.X_AXIS.nativeToLogical.return_value = 12
+        unit.state.position.Y_AXIS.nativeToLogical.return_value = 13
+        unit.state.position.Z_AXIS.nativeToLogical.return_value = 0
 
         expectedResult = ["Command1", "Command2"]
-        unit.state.processLinearMoves.return_value = expectedResult
+        unit.state.processMove.return_value = expectedResult
 
-        with mock.patch.multiple(
-            unit,
-            computeArcCenterOffsets=mock.DEFAULT,
-            planArc=mock.DEFAULT
-        ) as mocks:
-            mocks["planArc"].return_value = [4, 5]
+        cmd = "G2 I2 J1 X16 Y15 Z9 E10 F11"
+        result = unit._handle_G2(cmd, "G2", None)  # pylint: disable=protected-access
 
-            cmd = "G2 I6.1 J6.2 X7 Y8 Z9 E10 F11"
-            result = unit._handle_G2(cmd, "G2", None)  # pylint: disable=protected-access
+        unit.state.processMove.assert_called_with(
+            cmd, 10, 11,
+            Arc(cx=14, cy=14, radius=math.hypot(1, 2), startAngle=math.atan2(-1, -2), sweep=-math.pi),
+            16, 15, 9
+        )
 
-            mocks["computeArcCenterOffsets"].assert_not_called()
-            mocks["planArc"].assert_called_with(7, 8, 6.1, 6.2, True)
-            unit.state.processLinearMoves.assert_called_with(cmd, 10, 11, 9, 4, 5)
-
-            self.assertEqual(result, expectedResult, "A list of two commands should be returned")
+        self.assertEqual(result, expectedResult, "A list of two commands should be returned")
 
     def test_handle_G3(self):
         """Test the _handle_G3 method."""

@@ -6,7 +6,7 @@ from __future__ import absolute_import, division
 import math
 
 from .CommonMixin import CommonMixin
-from .GeometryMixin import GeometryMixin, ROUND_PLACES
+from .GeometryMixin import GeometryMixin, ROUND_PLACES, floatCmp
 
 INSIDE = 0  # 0000
 LEFT = 1    # 0001
@@ -14,34 +14,48 @@ RIGHT = 2   # 0010
 BOTTOM = 4  # 0100
 TOP = 8     # 1000
 
+Arc = None
 
-def append_arc_segment(result, arc, lastSweep, sweep):
+def doImportsIfNeeded():
+    global Arc, LineSegment
+    if (Arc is None):
+        from .Arc import Arc
+        from .LineSegment import LineSegment
+
+
+def append_arc_segment(result, arc, lastSweep, sweep, intersects):
     """
-    Append an new arc segment to a list if the provided sweep values are within the arc's range.
+    Create a new arc segment and appends to the result.
 
     The new arc is created with the same center point and radius as the original,
     with the startAngle set to arc.startAngle + lastSweep, and ends at the angle represented
     by the sweep parameter in the original arc.
+
+    No arc is added if the lastSweep and sweep values are identical.
+
+    Parameters:
+    -----------
+    result : List of Arc
+        The list to append the new arg segment to.
+    arc : Arc
+        The arc to segment.
+    lastSweep : float
+        The previous segment's ending sweep, relative to the original arc startAngle.
+    sweep : float
+        The ending sweep for the new arc, relative to the original arc startAngle.
+    intersects : boolean
+        Whether this portion of the arc intersects or not.
     """
-    # pylint: disable=import-outside-toplevel
-    from .Arc import Arc
-
-    if (arc.clockwise):
-        add = (arc.sweep <= sweep < lastSweep <= 0)
-    else:
-        add = (arc.sweep >= sweep > lastSweep >= 0)
-
-    if (add):
-        result.append(
-            Arc(
-                cx=arc.cx,
-                cy=arc.cy,
-                radius=arc.radius,
-                startAngle=arc.startAngle + lastSweep,
-                sweep=sweep - lastSweep
-            )
+    if (lastSweep != sweep):
+        a = Arc(
+            cx=arc.cx,
+            cy=arc.cy,
+            radius=arc.radius,
+            startAngle=arc.startAngle + lastSweep,
+            sweep=sweep - lastSweep
         )
-
+        a.intersects = intersects
+        result.append(a)
 
 class Rectangle(CommonMixin, GeometryMixin):
     """
@@ -90,8 +104,11 @@ class Rectangle(CommonMixin, GeometryMixin):
     def __eq__(self, other):
         """Compare this object to another."""
         return (
-            (self.x1 == other.x1) and (self.x2 == other.x2) and
-            (self.y1 == other.y1) and (self.y2 == other.y2)
+            (other is not None) and
+            (floatCmp(self.x1, other.x1) == 0) and
+            (floatCmp(self.x2, other.x2) == 0) and
+            (floatCmp(self.y1, other.y1) == 0) and
+            (floatCmp(self.y2, other.y2) == 0)
         )
 
     def __repr__(self):
@@ -115,6 +132,30 @@ class Rectangle(CommonMixin, GeometryMixin):
         self.y2 = round(self.y2, numPlaces)
         return self
 
+    def geometryDifference(self, geometry):
+        """
+        Compute the intersections & differences between this region and the specified geometry.
+
+        Parameters
+        ----------
+        geometry : Arc | LineSegment
+            The geometry to compute the intersections & differences for
+
+        Returns
+        -------
+        Returns a list containing 1 or more geometries of the same type as the input.  The original
+        geometry will be segmented into separate sections based on where it intersects the circle.
+        An additional 'intersects' property will be added to each returned geometry portion to
+        indicate whether that portion intersects the circle or not.
+        """
+        doImportsIfNeeded()
+        if (isinstance(geometry, LineSegment)):
+            return self.lineSegmentDifference(geometry)
+        elif (isinstance(geometry, Arc)):
+            return self.arcDifference(geometry)
+        else:
+            raise TypeError("geometry object must be an Arc or a LineSegment")
+
     def computeSegmentOutCode(self, x, y):
         """
         Compute the outcode for the point x,y relative to this rectangle.
@@ -133,12 +174,12 @@ class Rectangle(CommonMixin, GeometryMixin):
         0100 - The point is below
         1000 - The point is above
         """
-        code = INSIDE             # initialised as being inside of [[clip window]]
-
         if (x < self.x1):         # to the left of clip window
-            code |= LEFT
+            code = LEFT
         elif (x > self.x2):       # to the right of clip window
-            code |= RIGHT
+            code = RIGHT
+        else:
+            code = INSIDE         # inside of clip window
 
         if (y < self.y1):         # below the clip window
             code |= BOTTOM
@@ -166,24 +207,41 @@ class Rectangle(CommonMixin, GeometryMixin):
         LineSegment is returned.  If the LineSegment and region overlap, but both ends of the
         LineSegment fall outside the region, then two LineSegments are returned.
         """
-        # pylint: disable=invalid-name,import-outside-toplevel
-        from .LineSegment import LineSegment
+        doImportsIfNeeded()
         x0, y0, x1, y1 = lineSegment.x1, lineSegment.y1, lineSegment.x2, lineSegment.y2
 
         # compute outcodes for P0, P1, and whatever point lies outside the clip rectangle
         outcode0 = self.computeSegmentOutCode(x0, y0)
         outcode1 = self.computeSegmentOutCode(x1, y1)
+        insertPos = 0
 
         result = []
         while (True):
             if (not (outcode0 | outcode1)):
-                # bitwise OR is 0: both points inside window; trivially reject and exit loop
+                # bitwise OR is 0: both points inside window
+                segment = LineSegment(x1=x0, y1=y0, x2=x1, y2=y1)
+                segment.intersects = True
+                
+                l = len(result)
+                if (l == 0):    # Entirely contained
+                    result.append(segment)
+                elif (l == 2):  # Middle portion contained
+                    result.insert(1, segment)
+                else:
+                    p = result[0]
+                    if (x1 == p.x1) and (y1 == p.y1):  # Starting portion contained?
+                        result.insert(0, segment)
+                    else:  # Ending portion contained
+                        result.append(segment)
+
                 break
 
             if (outcode0 & outcode1):
                 # bitwise AND is not 0: both points share an outside zone (LEFT, RIGHT, TOP,
                 # or BOTTOM), so both must be outside window; accept and exit loop
-                result.append(LineSegment(x1=x0, y1=y0, x2=x1, y2=y1))
+                segment = LineSegment(x1=x0, y1=y0, x2=x1, y2=y1)
+                segment.intersects = False
+                result.append(segment)
                 break
 
             # failed both tests, so calculate the line segment to clip
@@ -216,16 +274,16 @@ class Rectangle(CommonMixin, GeometryMixin):
             # and get ready for next pass.
             if (outcodeOut == outcode0):
                 segment = LineSegment(x1=x0, y1=y0, x2=x, y2=y)
-                if (result):
-                    result.insert(0, segment)
-                else:
-                    result.append(segment)
+                segment.intersects = False
+                result.insert(0, segment)
 
                 x0 = x
                 y0 = y
                 outcode0 = self.computeSegmentOutCode(x0, y0)
             else:
-                result.append(LineSegment(x1=x, y1=y, x2=x1, y2=y1))
+                segment = LineSegment(x1=x, y1=y, x2=x1, y2=y1)
+                segment.intersects = False
+                result.append(segment)
 
                 x1 = x
                 y1 = y
@@ -382,11 +440,17 @@ class Rectangle(CommonMixin, GeometryMixin):
         then the original Arc is returned.  If the Arc and region overlap, but some of the
         arc falls outside the region, the returned list will contain 1 to 5 arcs.
         """
+        doImportsIfNeeded()
+
         if (not self.intersectsRect(arc.bounds)):
-            return [arc]    # Completely outside the region
+            a = Arc(arc)
+            a.intersects = False  # Completely outside the region
+            return [a]
 
         if (self.containsRect(arc.bounds)):
-            return []       # Completely inside the region
+            a = Arc(arc)
+            a.intersects = True   # Completely inside the region
+            return [a]
 
         # Compute angles of intersection with each edge
         anglesOfIntersection = []
@@ -421,18 +485,15 @@ class Rectangle(CommonMixin, GeometryMixin):
             reverse=arc.clockwise
         )
 
-        include = not self.containsPoint(arc.x1, arc.y1)
+        intersects = self.containsPoint(arc.x1, arc.y1)
         lastSweep = 0
 
         result = []
         for sweep in anglesOfIntersection:
-            if (include):
-                append_arc_segment(result, arc, lastSweep, sweep)
-
-            include = not include
+            append_arc_segment(result, arc, lastSweep, sweep, intersects)
+            intersects = not intersects
             lastSweep = sweep
 
-        if (include):
-            append_arc_segment(result, arc, lastSweep, arc.sweep)
+        append_arc_segment(result, arc, lastSweep, arc.sweep, intersects)
 
         return result

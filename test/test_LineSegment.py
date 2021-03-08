@@ -51,8 +51,11 @@ class LineSegmentTests(TestCase):
 
     def test_constructor_args(self):
         """Test the constructor when passed non-keyword arguments."""
-        with self.assertRaises(TypeError):
-            LineSegment(1, 2, 3, 4)  # pylint: disable=too-many-function-args
+        toCopy = LineSegment(x1=1, y1=2, x2=3, y2=4)
+
+        result = LineSegment(toCopy)
+
+        self.assertEqual(result, toCopy, "The result should equal the original")
 
     def test_equal(self):
         """Test the __eq__ method."""
@@ -70,6 +73,8 @@ class LineSegmentTests(TestCase):
         self.assertFalse(a == d)
         self.assertFalse(a == e)
         self.assertFalse(a == f)
+        self.assertFalse(a == None)
+        self.assertFalse(None == a)
 
     def test_roundValues(self):
         """Test the roundValues method."""
@@ -77,20 +82,19 @@ class LineSegmentTests(TestCase):
 
         unit.roundValues(6)
 
-        self.assertEqual(
-            LineSegment(x1=0.123457, y1=1.123457, x2=2.123457, y2=3.123457),
-            unit,
-            "It should round the values"
-        )
+        self.assertEqual(0.123457, unit.x1, "x1 should equal 0.123457")
+        self.assertEqual(1.123457, unit.y1, "y1 should equal 0.123457")
+        self.assertEqual(2.123457, unit.x2, "x2 should equal 0.123457")
+        self.assertEqual(3.123457, unit.y2, "y2 should equal 0.123457")
 
     def test_pointInSegment(self):
         """Test pointInSegment when the point is to the left."""
         unit = LineSegment(x1=0, y1=0, x2=1, y2=1)
-        
-        self.assertTrue(unit.pointInSegment(0, 0))       # p1
-        self.assertTrue(unit.pointInSegment(1, 1))       # p2
-        self.assertTrue(unit.pointInSegment(0.5, 0.5))   # inside
 
-        self.assertFalse(unit.pointInSegment(-1, -1))    # left
-        self.assertFalse(unit.pointInSegment(2, 2))      # right
-        self.assertFalse(unit.pointInSegment(0.5, 0.25)) # not colinear
+        self.assertTrue(unit.pointInSegment(0, 0))        # p1
+        self.assertTrue(unit.pointInSegment(1, 1))        # p2
+        self.assertTrue(unit.pointInSegment(0.5, 0.5))    # inside
+
+        self.assertFalse(unit.pointInSegment(-1, -1))     # left
+        self.assertFalse(unit.pointInSegment(2, 2))       # right
+        self.assertFalse(unit.pointInSegment(0.5, 0.25))  # not colinear

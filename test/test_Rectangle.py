@@ -59,6 +59,8 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         self.assertFalse(a == d)
         self.assertFalse(a == e)
         self.assertFalse(a == f)
+        self.assertFalse(a == None)
+        self.assertFalse(None == a)
 
     def test_roundValues(self):
         """Test roundValues to ensure the values are rounded as expected."""
@@ -96,7 +98,13 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.lineSegmentDifference(lineSeg)
 
-        self.assertEqual([], result, "It should return an empty list")
+        self.assertEqual([lineSeg], result, "It should return the original geometry")
+
+        self.assertEqual(
+            [True],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     def test_lineSegmentDifference_p1_inside_p2_right(self):
         """Test lineSegmentDifference when the p1 is contained and p2 is right."""
@@ -106,9 +114,40 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(lineSeg)
 
         self.assertEqual(
-            [LineSegment(x1=10, y1=5, x2=20, y2=5)],
+            [
+                LineSegment(x1=5, y1=5, x2=10, y2=5),
+                LineSegment(x1=10, y1=5, x2=20, y2=5)
+            ],
             result,
-            "It should return (10,5)-(20,5)"
+            "It should return the expected segments"
+        )
+
+        self.assertEqual(
+            [True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
+
+    def test_lineSegmentDifference_p1_inside_p2_left(self):
+        """Test lineSegmentDifference when the p1 is contained and p2 is left."""
+        unit = Rectangle(x1=0, y1=0, x2=10, y2=10)
+        lineSeg = LineSegment(x1=5, y1=5, x2=-20, y2=5)
+
+        result = unit.lineSegmentDifference(lineSeg)
+
+        self.assertEqual(
+            [
+                LineSegment(x1=5, y1=5, x2=0, y2=5),
+                LineSegment(x1=0, y1=5, x2=-20, y2=5)
+            ],
+            result,
+            "It should return the expected segments"
+        )
+
+        self.assertEqual(
+            [True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_right_p2_inside(self):
@@ -119,9 +158,18 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(lineSeg)
 
         self.assertEqual(
-            [LineSegment(x1=20, y1=5, x2=10, y2=5)],
+            [
+                LineSegment(x1=20, y1=5, x2=10, y2=5),
+                LineSegment(x1=10, y1=5, x2=5, y2=5)
+            ],
             result,
-            "It should return (20,5)-(10,5)"
+            "It should return the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_left_p2_inside(self):
@@ -132,9 +180,18 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(lineSeg)
 
         self.assertEqual(
-            [LineSegment(x1=-10, y1=5, x2=0, y2=5)],
+            [
+                LineSegment(x1=-10, y1=5, x2=0, y2=5),
+                LineSegment(x1=0, y1=5, x2=5, y2=5)
+            ],
             result,
-            "It should return (-10,5)-(0,5)"
+            "It should return the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_p2_outside_no_intersection(self):
@@ -146,6 +203,12 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         self.assertEqual([lineSeg], result, "It should return (0,20)-(10,20)")
 
+        self.assertEqual(
+            [False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
+
     def test_lineSegmentDifference_p1_p2_outside_intersects_ltr(self):
         """Test lineSegmentDifference when both points outside and intersects left to right."""
         unit = Rectangle(x1=0, y1=0, x2=10, y2=10)
@@ -156,9 +219,16 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual(
             [
                 LineSegment(x1=-10, y1=5, x2=0, y2=5),
+                LineSegment(x1=0, y1=5, x2=10, y2=5),
                 LineSegment(x1=10, y1=5, x2=20, y2=5)
             ],
-            result, "It should return a list with two items"
+            result, "It should return the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_p2_outside_intersects_rtl(self):
@@ -171,9 +241,16 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual(
             [
                 LineSegment(x1=20, y1=5, x2=10, y2=5),
+                LineSegment(x1=10, y1=5, x2=0, y2=5),
                 LineSegment(x1=0, y1=5, x2=-10, y2=5)
             ],
-            result, "It should return a list with two items"
+            result, "It should return the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_p2_outside_intersects_btt(self):
@@ -186,9 +263,16 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual(
             [
                 LineSegment(x1=5, y1=-10, x2=5, y2=0),
+                LineSegment(x1=5, y1=0, x2=5, y2=10),
                 LineSegment(x1=5, y1=10, x2=5, y2=20)
             ],
-            result, "It should return a list with two items"
+            result, "It should return the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_p2_outside_intersects_ttb(self):
@@ -201,9 +285,16 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         self.assertEqual(
             [
                 LineSegment(x1=5, y1=20, x2=5, y2=10),
+                LineSegment(x1=5, y1=10, x2=5, y2=0),
                 LineSegment(x1=5, y1=0, x2=5, y2=-10)
             ],
-            result, "It should return a list with two items"
+            result, "It should return the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
         )
 
     def test_intersectsRect(self):
@@ -351,7 +442,13 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        self.assertEqual([], result, "It should return an empty list")
+        self.assertEqual([arc], result, "It should return the original arc")
+
+        self.assertEqual(
+            [True],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     def test_arcDifference_outside(self):
         """Test arcDifference when the arc is fully outside."""
@@ -362,79 +459,107 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         self.assertEqual([arc], result, "It should return the original arc")
 
+        self.assertEqual(
+            [False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
+
     def test_arcDifference_intersects_left_once(self):
         """Test arcDifference when the arc intersects the left side one time."""
         unit = Rectangle(x1=0, y1=0, x2=10, y2=10)
         arc = Arc(cx=0, cy=0, radius=5, startAngle=math.pi / 4, sweep=math.pi)
         expected = [
-            Arc(
-                cx=0, cy=0, radius=5, startAngle=math.pi / 2, sweep=math.pi * 0.75
-            ).roundValues(9)
+            Arc(cx=0, cy=0, radius=5, startAngle=math.pi / 4, sweep=math.pi / 4),
+            Arc(cx=0, cy=0, radius=5, startAngle=math.pi / 2, sweep=math.pi * 0.75)
         ]
 
         result = unit.arcDifference(arc)
 
-        result[0].roundValues(9)
-
         self.assertEqual(expected, result, "It should return the expected arc")
+
+        self.assertEqual(
+            [True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     def test_arcDifference_intersects_top_once(self):
         """Test arcDifference when the arc intersects the top side one time."""
         unit = Rectangle(x1=0, y1=0, x2=10, y2=10)
         arc = Arc(cx=0, cy=10, radius=5, startAngle=math.pi * 0.75, sweep=-math.pi)
         expected = [
-            Arc(
-                cx=0, cy=10, radius=5, startAngle=math.pi * 0.75, sweep=-math.pi * 0.75
-            ).roundValues(9)
+            Arc(cx=0, cy=10, radius=5, startAngle=math.pi * 0.75, sweep=-math.pi * 0.75),
+            Arc(cx=0, cy=10, radius=5, startAngle=0, sweep=-math.pi / 4)
         ]
 
         result = unit.arcDifference(arc)
 
-        result[0].roundValues(9)
-
         self.assertEqual(expected, result, "It should return the expected arc")
+
+        self.assertEqual(
+            [False, True],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     def test_arcDifference_intersects_right_once(self):
         """Test arcDifference when the arc intersects the right side one time."""
         unit = Rectangle(x1=0, y1=0, x2=10, y2=10)
         arc = Arc(cx=10, cy=0, radius=5, startAngle=0, sweep=math.pi * 0.75)
         expected = [
-            Arc(cx=10, cy=0, radius=5, startAngle=0, sweep=math.pi / 2).roundValues(9)
+            Arc(cx=10, cy=0, radius=5, startAngle=0, sweep=math.pi / 2),
+            Arc(cx=10, cy=0, radius=5, startAngle=math.pi / 2, sweep=math.pi / 4)
         ]
 
         result = unit.arcDifference(arc)
 
-        result[0].roundValues(9)
-
         self.assertEqual(expected, result, "It should return the expected arc")
+
+        self.assertEqual(
+            [False, True],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     def test_arcDifference_intersects_bottom_once(self):
         """Test arcDifference when the arc intersects the bottom side one time."""
         unit = Rectangle(x1=0, y1=0, x2=10, y2=10)
         arc = Arc(cx=10, cy=0, radius=5, startAngle=math.pi * 0.75, sweep=math.pi)
         expected = [
-            Arc(cx=10, cy=0, radius=5, startAngle=math.pi, sweep=math.pi * 0.75).roundValues(9)
+            Arc(cx=10, cy=0, radius=5, startAngle=math.pi * 0.75, sweep=math.pi / 4),
+            Arc(cx=10, cy=0, radius=5, startAngle=math.pi, sweep=math.pi * 0.75)
         ]
 
         result = unit.arcDifference(arc)
 
-        result[0].roundValues(9)
-
         self.assertEqual(expected, result, "It should return the expected arc")
+
+        self.assertEqual(
+            [True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     def test_arcDifference_intersects_left_twice(self):
         """Test arcDifference when the arc intersects the left side twice."""
         unit = Rectangle(x1=0, y1=0, x2=10, y2=10)
         arc = Arc(cx=0, cy=5, radius=1, startAngle=0, sweep=math.pi * 2)
         expected = [
-            Arc(cx=0, cy=5, radius=1, startAngle=math.pi / 2, sweep=math.pi).roundValues(9)
+            Arc(cx=0, cy=5, radius=1, startAngle=0, sweep=math.pi / 2),
+            Arc(cx=0, cy=5, radius=1, startAngle=math.pi / 2, sweep=math.pi),
+            Arc(cx=0, cy=5, radius=1, startAngle=math.pi * 1.5, sweep=math.pi / 2)
         ]
 
         result = unit.arcDifference(arc)
 
-        result[0].roundValues(9)
-
         self.assertEqual(expected, result, "It should return the expected arc")
+
+        self.assertEqual(
+            [True, False, True],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     def test_arcDifference_intersects_top_twice(self):
         """Test arcDifference when the arc intersects the top side twice."""
@@ -442,14 +567,19 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         arc = Arc(cx=5, cy=10, radius=1, startAngle=0, sweep=math.pi * 2)
 
         expected = [
-            Arc(cx=5, cy=10, radius=1, startAngle=0, sweep=math.pi).roundValues(9)
+            Arc(cx=5, cy=10, radius=1, startAngle=0, sweep=math.pi),
+            Arc(cx=5, cy=10, radius=1, startAngle=math.pi, sweep=math.pi)
         ]
 
         result = unit.arcDifference(arc)
 
-        result[0].roundValues(9)
-
         self.assertEqual(expected, result, "It should return the expected arc")
+        
+        self.assertEqual(
+            [False, True],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     def test_arcDifference_intersects_right_twice(self):
         """Test arcDifference when the arc intersects the right side twice."""
@@ -457,32 +587,41 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         arc = Arc(cx=10, cy=5, radius=1, startAngle=0, sweep=math.pi * 2)
 
         expected = [
-            Arc(cx=10, cy=5, radius=1, startAngle=0, sweep=math.pi / 2).roundValues(9),
-            Arc(cx=10, cy=5, radius=1, startAngle=math.pi * 1.5, sweep=math.pi / 2).roundValues(9)
+            Arc(cx=10, cy=5, radius=1, startAngle=0, sweep=math.pi / 2),
+            Arc(cx=10, cy=5, radius=1, startAngle=math.pi / 2, sweep=math.pi),
+            Arc(cx=10, cy=5, radius=1, startAngle=math.pi * 1.5, sweep=math.pi / 2)
         ]
 
         result = unit.arcDifference(arc)
 
-        for arc in result:
-            arc.roundValues(9)
-
         self.assertEqual(expected, result, "It should return the expected arcs")
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     def test_arcDifference_intersects_bottom_twice(self):
         """Test arcDifference when the arc intersects the bottom side twice."""
         unit = Rectangle(x1=0, y1=0, x2=10, y2=10)
-        arc = Arc(cx=5, cy=0, radius=1, startAngle=math.pi/2, sweep=-math.pi * 2)
+        arc = Arc(cx=5, cy=0, radius=1, startAngle=math.pi / 2, sweep=-math.pi * 2)
 
         expected = [
-            Arc(cx=5, cy=0, radius=1, startAngle=0, sweep=-math.pi).roundValues(9)
+            Arc(cx=5, cy=0, radius=1, startAngle=math.pi / 2, sweep=-math.pi / 2),
+            Arc(cx=5, cy=0, radius=1, startAngle=0, sweep=-math.pi),
+            Arc(cx=5, cy=0, radius=1, startAngle=math.pi, sweep=-math.pi / 2)
         ]
 
         result = unit.arcDifference(arc)
 
-        for arc in result:
-            arc.roundValues(9)
-
         self.assertEqual(expected, result, "It should return the expected arc")
+
+        self.assertEqual(
+            [True, False, True],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
 
     # intersects the all edges two times
     def test_arcDifference_intersects_max(self):
@@ -492,16 +631,19 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
         sr65 = math.sqrt(6 * 6 - 5 * 5)
         sweep1 = math.atan2(sr65, 5)
         sweep2 = 2 * sweep1
+        exsweep = math.atan2(5, sr65) - sweep1
 
         expected = [
             Arc(cx=5, cy=5, radius=6, startAngle=0, sweep=sweep1),
+            Arc(cx=5, cy=5, radius=6, startAngle=sweep1, sweep=exsweep),
             Arc(cx=5, cy=5, radius=6, startAngle=math.atan2(5, sr65), sweep=sweep2),
+            Arc(cx=5, cy=5, radius=6, startAngle=sweep1 + exsweep + sweep2, sweep=exsweep),
             Arc(cx=5, cy=5, radius=6, startAngle=math.atan2(sr65, -5), sweep=sweep2),
+            Arc(cx=5, cy=5, radius=6, startAngle=sweep1 + 2 * (exsweep + sweep2), sweep=exsweep),
             Arc(cx=5, cy=5, radius=6, startAngle=math.atan2(-5, -sr65), sweep=sweep2),
+            Arc(cx=5, cy=5, radius=6, startAngle=sweep1 + 3 * (exsweep + sweep2), sweep=exsweep),
             Arc(cx=5, cy=5, radius=6, startAngle=math.atan2(-sr65, 5), sweep=sweep1)
         ]
-        for arc in expected:
-            arc.roundValues(numPlaces)
 
         # --
         unit = Rectangle(x1=0, y1=0, x2=10, y2=10)
@@ -509,7 +651,49 @@ class RectangleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        for arc in result:
-            arc.roundValues(numPlaces)
-
         self.assertEqual(expected, result, "It should return 5 arcs")
+
+        self.assertEqual(
+            [False, True, False, True, False, True, False, True, False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
+
+    def test_geometryDifference_LineSegment(self):
+        """Test geometryDifference when passed a LineSegment."""
+        unit = Rectangle(x1=0, y1=0, x2=1, y2=1)
+
+        geometry = LineSegment(x1=1, y1=2, x2=3, y2=4)
+
+        result = unit.geometryDifference(geometry)
+
+        self.assertEqual([geometry], result, "It should return the original geometry")
+
+        self.assertEqual(
+            [False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
+
+    def test_geometryDifference_Arc(self):
+        """Test geometryDifference when passed an Arc."""
+        unit = Rectangle(x1=0, y1=0, x2=1, y2=1)
+
+        geometry = Arc(cx=10, cy=10, radius=1, startAngle=0, sweep=math.pi)
+
+        result = unit.geometryDifference(geometry)
+
+        self.assertEqual([geometry], result, "It should return the original geometry")
+
+        self.assertEqual(
+            [False],
+            list(map(lambda a : a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
+
+    def test_geometryDifference_other(self):
+        """Test geometryDifference when passed an unsupported type."""
+        unit = Rectangle(x1=0, y1=0, x2=1, y2=1)
+
+        with self.assertRaises(TypeError):
+            unit.geometryDifference(1234)

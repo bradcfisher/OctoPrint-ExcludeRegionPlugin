@@ -45,10 +45,10 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
     def test_constructor_invalid_radius(self):
         """Test the constructor when passed an invalid radius value."""
         with self.assertRaises(ValueError):
-            unit = Circle(cx=1, cy=2, radius=0)
+            Circle(cx=1, cy=2, radius=0)
 
         with self.assertRaises(ValueError):
-            unit = Circle(cx=1, cy=2, radius=-1)
+            Circle(cx=1, cy=2, radius=-1)
 
     def test_equal(self):
         """Test the __eq__ method."""
@@ -64,6 +64,8 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         self.assertFalse(a == c)
         self.assertFalse(a == d)
         self.assertFalse(a == e)
+        self.assertFalse(a == None)
+        self.assertFalse(None == a)
 
     def test_roundValues(self):
         """Test roundValues to ensure the values are rounded as expected."""
@@ -94,7 +96,10 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         unit = Circle(cx=10, cy=10, radius=3)
 
-        self.assertFalse(unit.containsRect(rect), "it should not contain a rect that does not intersect")
+        self.assertFalse(
+            unit.containsRect(rect),
+            "it should not contain a rect that does not intersect"
+        )
 
     def test_containsRect_partial_intersection(self):
         """Test containsRect when the rectangle partially intersects."""
@@ -102,7 +107,10 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         unit = Circle(cx=10, cy=10, radius=3)
 
-        self.assertFalse(unit.containsRect(rect), "it should not contain a rect that partially intersects")
+        self.assertFalse(
+            unit.containsRect(rect),
+            "it should not contain a rect that partially intersects"
+        )
 
     def test_containsRect_contained(self):
         """Test containsRect when the rectangle is fully contained."""
@@ -121,6 +129,12 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         self.assertEqual([segment], result, "It should return the original segment")
 
+        self.assertEqual(
+            [False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
+        )
+
     def test_lineSegmentDifference_outside_vert(self):
         """Test lineSegmentDifference when fully outside (vertical line intersection)."""
         segment = LineSegment(x1=0, y1=3, x2=0, y2=2)
@@ -129,6 +143,12 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual([segment], result, "It should return the original segment")
+
+        self.assertEqual(
+            [False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
+        )
 
     def test_lineSegmentDifference_outside_perimiter_vert(self):
         """Test lineSegmentDifference when fully outside but touches the perimiter (vertical)."""
@@ -139,6 +159,12 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         self.assertEqual([segment], result, "It should return the original segment")
 
+        self.assertEqual(
+            [False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
+        )
+
     def test_lineSegmentDifference_outside_horiz(self):
         """Test lineSegmentDifference when fully outside (horizontal line intersection)."""
         segment = LineSegment(x1=3, y1=0, x2=2, y2=0)
@@ -147,6 +173,12 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual([segment], result, "It should return the original segment")
+
+        self.assertEqual(
+            [False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
+        )
 
     def test_lineSegmentDifference_outside_perimiter_horiz(self):
         """Test lineSegmentDifference when fully outside but touches the perimiter (vertical)."""
@@ -157,6 +189,12 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         self.assertEqual([segment], result, "It should return the original segment")
 
+        self.assertEqual(
+            [False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
+        )
+
     def test_lineSegmentDifference_contained_horiz_left_right(self):
         """Test lineSegmentDifference when fully contained (horizontal left to right)."""
         segment = LineSegment(x1=-1, y1=0, x2=1, y2=0)
@@ -164,7 +202,13 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.lineSegmentDifference(segment)
 
-        self.assertEqual([], result, "It should return an empty list")
+        self.assertEqual([segment], result, "It should return the original segment")
+
+        self.assertEqual(
+            [True],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
+        )
 
     def test_lineSegmentDifference_contained_horiz_right_left(self):
         """Test lineSegmentDifference when fully contained (horizontal right to left)."""
@@ -173,7 +217,13 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.lineSegmentDifference(segment)
 
-        self.assertEqual([], result, "It should return an empty list")
+        self.assertEqual([segment], result, "It should return a single item list")
+
+        self.assertEqual(
+            [True],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
+        )
 
     def test_lineSegmentDifference_contained_vert_bottom_top(self):
         """Test lineSegmentDifference when fully contained (vertical bottom to top)."""
@@ -182,7 +232,13 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.lineSegmentDifference(segment)
 
-        self.assertEqual([], result, "It should return an empty list")
+        self.assertEqual([segment], result, "It should return an single item list")
+
+        self.assertEqual(
+            [True],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
+        )
 
     def test_lineSegmentDifference_contained_vert_top_bottom(self):
         """Test lineSegmentDifference when fully contained (vertical top to bottom)."""
@@ -191,7 +247,13 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.lineSegmentDifference(segment)
 
-        self.assertEqual([], result, "It should return an empty list")
+        self.assertEqual([segment], result, "It should return a single item list")
+
+        self.assertEqual(
+            [True],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
+        )
 
     def test_lineSegmentDifference_p1_inside_p2_right(self):
         """Test lineSegmentDifference when the p1 is contained and p2 is right."""
@@ -201,9 +263,18 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual(
-            [LineSegment(x1=1, y1=0, x2=2, y2=0)],
+            [
+                LineSegment(x1=0, y1=0, x2=1, y2=0),
+                LineSegment(x1=1, y1=0, x2=2, y2=0)
+            ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_left_p2_inside(self):
@@ -214,9 +285,18 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual(
-            [LineSegment(x1=-2, y1=0, x2=-1, y2=0)],
+            [
+                LineSegment(x1=-2, y1=0, x2=-1, y2=0),
+                LineSegment(x1=-1, y1=0, x2=0, y2=0)
+            ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_right_p2_inside(self):
@@ -227,9 +307,18 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual(
-            [LineSegment(x1=2, y1=0, x2=1, y2=0)],
+            [
+                LineSegment(x1=2, y1=0, x2=1, y2=0),
+                LineSegment(x1=1, y1=0, x2=0, y2=0)
+            ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_inside_p2_left(self):
@@ -240,9 +329,18 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual(
-            [LineSegment(x1=-1, y1=0, x2=-2, y2=0)],
+            [
+                LineSegment(x1=0, y1=0, x2=-1, y2=0),
+                LineSegment(x1=-1, y1=0, x2=-2, y2=0)
+            ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_left_p2_right_horiz(self):
@@ -253,9 +351,19 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual(
-            [LineSegment(x1=-2, y1=0, x2=-1, y2=0), LineSegment(x1=1, y1=0, x2=2, y2=0)],
+            [
+                LineSegment(x1=-2, y1=0, x2=-1, y2=0),
+                LineSegment(x1=-1, y1=0, x2=1, y2=0),
+                LineSegment(x1=1, y1=0, x2=2, y2=0)
+            ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_right_p2_left_horiz(self):
@@ -266,9 +374,19 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual(
-            [LineSegment(x1=2, y1=0, x2=1, y2=0), LineSegment(x1=-1, y1=0, x2=-2, y2=0)],
+            [
+                LineSegment(x1=2, y1=0, x2=1, y2=0),
+                LineSegment(x1=1, y1=0, x2=-1, y2=0),
+                LineSegment(x1=-1, y1=0, x2=-2, y2=0)
+            ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_above_p2_below_vert(self):
@@ -279,9 +397,19 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual(
-            [LineSegment(x1=0, y1=2, x2=0, y2=1), LineSegment(x1=0, y1=-1, x2=0, y2=-2)],
+            [
+                LineSegment(x1=0, y1=2, x2=0, y2=1),
+                LineSegment(x1=0, y1=1, x2=0, y2=-1),
+                LineSegment(x1=0, y1=-1, x2=0, y2=-2)
+            ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_below_p2_above_vert(self):
@@ -292,9 +420,19 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         self.assertEqual(
-            [LineSegment(x1=0, y1=2, x2=0, y2=1), LineSegment(x1=0, y1=-1, x2=0, y2=-2)],
+            [
+                LineSegment(x1=0, y1=2, x2=0, y2=1),
+                LineSegment(x1=0, y1=1, x2=0, y2=-1),
+                LineSegment(x1=0, y1=-1, x2=0, y2=-2)
+            ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_top_left_p2_bottom_right(self):
@@ -305,16 +443,21 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         cosPi4 = math.cos(math.pi / 4)
-        for v in result:
-            v.roundValues(9)
 
         self.assertEqual(
             [
-                LineSegment(x1=-2, y1=2, x2=-cosPi4, y2=cosPi4).roundValues(9),
-                LineSegment(x1=cosPi4, y1=-cosPi4, x2=2, y2=-2).roundValues(9)
+                LineSegment(x1=-2, y1=2, x2=-cosPi4, y2=cosPi4),
+                LineSegment(x1=-cosPi4, y1=cosPi4, x2=cosPi4, y2=-cosPi4),
+                LineSegment(x1=cosPi4, y1=-cosPi4, x2=2, y2=-2)
             ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_bottom_left_p2_top_right(self):
@@ -325,16 +468,21 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         cosPi4 = math.cos(math.pi / 4)
-        for v in result:
-            v.roundValues(9)
 
         self.assertEqual(
             [
-                LineSegment(x1=-2, y1=-2, x2=-cosPi4, y2=-cosPi4).roundValues(9),
-                LineSegment(x1=cosPi4, y1=cosPi4, x2=2, y2=2).roundValues(9)
+                LineSegment(x1=-2, y1=-2, x2=-cosPi4, y2=-cosPi4),
+                LineSegment(x1=-cosPi4, y1=-cosPi4, x2=cosPi4, y2=cosPi4),
+                LineSegment(x1=cosPi4, y1=cosPi4, x2=2, y2=2)
             ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_top_right_p2_bottom_left(self):
@@ -345,16 +493,21 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         cosPi4 = math.cos(math.pi / 4)
-        for v in result:
-            v.roundValues(9)
 
         self.assertEqual(
             [
-                LineSegment(x1=2, y1=2, x2=cosPi4, y2=cosPi4).roundValues(9),
-                LineSegment(x1=-cosPi4, y1=-cosPi4, x2=-2, y2=-2).roundValues(9)
+                LineSegment(x1=2, y1=2, x2=cosPi4, y2=cosPi4),
+                LineSegment(x1=cosPi4, y1=cosPi4, x2=-cosPi4, y2=-cosPi4),
+                LineSegment(x1=-cosPi4, y1=-cosPi4, x2=-2, y2=-2)
             ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_lineSegmentDifference_p1_bottom_right_p2_top_left(self):
@@ -365,16 +518,21 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         result = unit.lineSegmentDifference(segment)
 
         cosPi4 = math.cos(math.pi / 4)
-        for v in result:
-            v.roundValues(9)
 
         self.assertEqual(
             [
-                LineSegment(x1=2, y1=-2, x2=cosPi4, y2=-cosPi4).roundValues(9),
-                LineSegment(x1=-cosPi4, y1=cosPi4, x2=-2, y2=2).roundValues(9)
+                LineSegment(x1=2, y1=-2, x2=cosPi4, y2=-cosPi4),
+                LineSegment(x1=cosPi4, y1=-cosPi4, x2=-cosPi4, y2=cosPi4),
+                LineSegment(x1=-cosPi4, y1=cosPi4, x2=-2, y2=2)
             ],
             result,
             "It should return a list containing the expected segments"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda l: l.intersects, result)),
+            "Each segment should have the expected intersects value"
         )
 
     def test_arcDifference_p1_in_p2_out_CCW(self):
@@ -385,15 +543,19 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        for v in result:
-            v.roundValues(9)
-
         self.assertEqual(
             [
-                Arc(cx=x, cy=0, radius=1, startAngle=math.pi * 1.5, sweep=math.pi / 2).roundValues(9)
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi, sweep=math.pi / 2),
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi * 1.5, sweep=math.pi / 2)
             ],
             result,
             "It should return a list containing the expected arcs"
+        )
+
+        self.assertEqual(
+            [True, False],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
         )
 
     def test_arcDifference_p1_out_p2_in_CCW(self):
@@ -404,15 +566,19 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        for v in result:
-            v.roundValues(9)
-
         self.assertEqual(
             [
-                Arc(cx=x, cy=0, radius=1, startAngle=0, sweep=math.pi / 2).roundValues(9)
+                Arc(cx=x, cy=0, radius=1, startAngle=0, sweep=math.pi / 2),
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi / 2, sweep=math.pi / 2)
             ],
             result,
             "It should return a list containing the expected arcs"
+        )
+
+        self.assertEqual(
+            [False, True],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
         )
 
     def test_arcDifference_p1_out_p2_out_CCW(self):
@@ -423,16 +589,20 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        for v in result:
-            v.roundValues(9)
-
         self.assertEqual(
             [
-                Arc(cx=x, cy=0, radius=1, startAngle=0, sweep=math.pi / 2).roundValues(9),
-                Arc(cx=x, cy=0, radius=1, startAngle=1.5 * math.pi, sweep=math.pi / 2).roundValues(9),
+                Arc(cx=x, cy=0, radius=1, startAngle=0, sweep=math.pi / 2),
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi / 2, sweep=math.pi),
+                Arc(cx=x, cy=0, radius=1, startAngle=1.5 * math.pi, sweep=math.pi / 2),
             ],
             result,
             "It should return a list containing the expected arcs"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
         )
 
     def test_arcDifference_p1_in_p2_in_CCW(self):
@@ -443,15 +613,20 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        for v in result:
-            v.roundValues(9)
-
         self.assertEqual(
             [
-                Arc(cx=x, cy=0, radius=1, startAngle=1.5 * math.pi, sweep=math.pi).roundValues(9)
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi, sweep=math.pi / 2),
+                Arc(cx=x, cy=0, radius=1, startAngle=1.5 * math.pi, sweep=math.pi),
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi / 2, sweep=math.pi / 2)
             ],
             result,
             "It should return a list containing the expected arcs"
+        )
+
+        self.assertEqual(
+            [True, False, True],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
         )
 
     def test_arcDifference_p1_in_p2_out_CW(self):
@@ -462,15 +637,19 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        for v in result:
-            v.roundValues(9)
-
         self.assertEqual(
             [
-                Arc(cx=x, cy=0, radius=1, startAngle=math.pi / 2, sweep=-math.pi / 2).roundValues(9)
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi, sweep=-math.pi / 2),
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi / 2, sweep=-math.pi / 2)
             ],
             result,
             "It should return a list containing the expected arcs"
+        )
+
+        self.assertEqual(
+            [True, False],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
         )
 
     def test_arcDifference_p1_out_p2_in_CW(self):
@@ -481,15 +660,19 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        for v in result:
-            v.roundValues(9)
-
         self.assertEqual(
             [
-                Arc(cx=x, cy=0, radius=1, startAngle=0, sweep=-math.pi / 2).roundValues(9)
+                Arc(cx=x, cy=0, radius=1, startAngle=0, sweep=-math.pi / 2),
+                Arc(cx=x, cy=0, radius=1, startAngle=-math.pi / 2, sweep=-math.pi / 2)
             ],
             result,
             "It should return a list containing the expected arcs"
+        )
+
+        self.assertEqual(
+            [False, True],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
         )
 
     def test_arcDifference_p1_out_p2_out_CW(self):
@@ -500,16 +683,20 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        for v in result:
-            v.roundValues(9)
-
         self.assertEqual(
             [
-                Arc(cx=x, cy=0, radius=1, startAngle=0, sweep=-math.pi / 2).roundValues(9),
-                Arc(cx=x, cy=0, radius=1, startAngle=math.pi / 2, sweep=-math.pi / 2).roundValues(9),
+                Arc(cx=x, cy=0, radius=1, startAngle=0, sweep=-math.pi / 2),
+                Arc(cx=x, cy=0, radius=1, startAngle=-math.pi / 2, sweep=-math.pi),
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi / 2, sweep=-math.pi / 2)
             ],
             result,
             "It should return a list containing the expected arcs"
+        )
+
+        self.assertEqual(
+            [False, True, False],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
         )
 
     def test_arcDifference_p1_in_p2_in_C(self):
@@ -520,15 +707,20 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
 
         result = unit.arcDifference(arc)
 
-        for v in result:
-            v.roundValues(9)
-
         self.assertEqual(
             [
-                Arc(cx=x, cy=0, radius=1, startAngle=math.pi / 2, sweep=-math.pi).roundValues(9)
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi, sweep=-math.pi / 2),
+                Arc(cx=x, cy=0, radius=1, startAngle=math.pi / 2, sweep=-math.pi),
+                Arc(cx=x, cy=0, radius=1, startAngle=-math.pi / 2, sweep=-math.pi / 2)
             ],
             result,
             "It should return a list containing the expected arcs"
+        )
+
+        self.assertEqual(
+            [True, False, True],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
         )
 
     def test_arcDifference_non_intersecting_outside_1(self):
@@ -537,8 +729,14 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         unit = Circle(cx=0, cy=0, radius=10)
 
         result = unit.arcDifference(arc)
-        
+
         self.assertEqual([arc], result, "It should return a list containing the original arc")
+
+        self.assertEqual(
+            [False],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
+        )
 
     def test_arcDifference_non_intersecting_outside_2(self):
         """Test arcDifference when the circle containing the arc does not intersect."""
@@ -546,8 +744,14 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         unit = Circle(cx=0, cy=0, radius=10)
 
         result = unit.arcDifference(arc)
-        
+
         self.assertEqual([arc], result, "It should return a list containing the original arc")
+
+        self.assertEqual(
+            [False],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
+        )
 
     def test_arcDifference_non_intersecting_outside_touching(self):
         """Test arcDifference when the arc touches the circle at one point."""
@@ -555,8 +759,14 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         unit = Circle(cx=0, cy=0, radius=10)
 
         result = unit.arcDifference(arc)
-        
-        self.assertEqual([arc], result, "It should return a list containing the original arc")
+
+        self.assertEqual([arc], result, "It should return the original arc")
+
+        self.assertEqual(
+            [False],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
+        )
 
     def test_arcDifference_contains_bounding_box(self):
         """Test arcDifference when the arc's bounding box is contained."""
@@ -564,8 +774,14 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         unit = Circle(cx=0, cy=0, radius=10)
 
         result = unit.arcDifference(arc)
-        
-        self.assertEqual([], result, "It should return an empty list")
+
+        self.assertEqual([arc], result, "It should return the original arc")
+
+        self.assertEqual(
+            [True],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
+        )
 
     def test_arcDifference_contains_no_bounding_box(self):
         """Test arcDifference when the arc is contained, but the bounding box is not."""
@@ -574,5 +790,56 @@ class CircleTests(TestCase):  # pylint: disable=too-many-public-methods
         unit = Circle(cx=0, cy=0, radius=10)
 
         result = unit.arcDifference(arc)
-        
-        self.assertEqual([], result, "It should return an empty list")
+
+        self.assertEqual([arc], result, "It should return the original arc")
+
+        self.assertEqual(
+            [True],
+            list(map(lambda a: a.intersects, result)),
+            "Each arc should have the expected intersects value"
+        )
+
+    def test_geometryDifference_LineSegment(self):
+        """Test geometryDifference when passed a LineSegment."""
+        unit = Circle(cx=0, cy=0, radius=1)
+
+        geometry = LineSegment(x1=1, y1=2, x2=3, y2=4)
+
+        result = unit.geometryDifference(geometry)
+
+        self.assertEqual([geometry], result, "It should return the original geometry")
+
+        self.assertEqual(
+            [False],
+            list(map(lambda a: a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
+
+    def test_geometryDifference_Arc(self):
+        """Test geometryDifference when passed an Arc."""
+        unit = Circle(cx=10, cy=0, radius=10)
+
+        geometry = Arc(cx=0, cy=10, radius=10, startAngle=0, sweep=math.pi * 2)
+
+        result = unit.geometryDifference(geometry)
+
+        self.assertEqual(
+            [
+                Arc(cx=0, cy=10, radius=10, startAngle=0, sweep=math.pi * 1.5),
+                Arc(cx=0, cy=10, radius=10, startAngle=math.pi * 1.5, sweep=math.pi / 2)
+            ],
+            result, "It should return the original geometry"
+        )
+
+        self.assertEqual(
+            [False, True],
+            list(map(lambda a: a.intersects, result)),
+            "Each geometry should have the expected intersects value"
+        )
+
+    def test_geometryDifference_other(self):
+        """Test geometryDifference when passed an unsupported type."""
+        unit = Circle(cx=0, cy=0, radius=1)
+
+        with self.assertRaises(TypeError):
+            unit.geometryDifference(1234)

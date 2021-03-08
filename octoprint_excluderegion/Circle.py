@@ -6,46 +6,54 @@ from __future__ import absolute_import, division
 import math
 
 from .CommonMixin import CommonMixin
-from .GeometryMixin import GeometryMixin, ROUND_PLACES, EPSILON
+from .GeometryMixin import GeometryMixin, ROUND_PLACES, floatCmp
 from .LineSegment import LineSegment
+from .Arc import Arc
 
 
 # Compute where along the segment the point falls
 # Point is on segment iff: 0 <= dotproduct <= 1
-def normalizedDotProd(segment, x, y):
+def normalized_dot_prod(segment, x, y):
     """Compute the normalized dot product of a point relative to a line segment."""
-    dx = (segment.x2 - segment.x1)
-    dy = (segment.y2 - segment.y1)
-    squaredlengthba = dx*dx + dy*dy
-    return ((x - segment.x1) * dx + (y - segment.y1) * dy) / squaredlengthba
+    deltaX = (segment.x2 - segment.x1)
+    deltaY = (segment.y2 - segment.y1)
+    squaredlengthba = deltaX*deltaX + deltaY*deltaY
+    return ((x - segment.x1) * deltaX + (y - segment.y1) * deltaY) / squaredlengthba
 
 
-def append_arc_segment(result, arc, lastSweep, sweep):
+def append_arc_segment(result, arc, lastSweep, sweep, intersects):
     """
-    Append an new arc segment to a list if the provided sweep values are within the arc's range.
+    Create a new arc segment and appends to the result.
 
     The new arc is created with the same center point and radius as the original,
     with the startAngle set to arc.startAngle + lastSweep, and ends at the angle represented
     by the sweep parameter in the original arc.
+
+    No arc is added if the lastSweep and sweep values are identical.
+
+    Parameters
+    ----------
+    result : List of Arc
+        The list to append the new arg segment to.
+    arc : Arc
+        The arc to segment.
+    lastSweep : float
+        The previous segment's ending sweep, relative to the original arc startAngle.
+    sweep : float
+        The ending sweep for the new arc, relative to the original arc startAngle.
+    intersects : boolean
+        Whether this portion of the arc intersects or not.
     """
-    # pylint: disable=import-outside-toplevel
-    from .Arc import Arc
-
-    if (arc.clockwise):
-        add = (arc.sweep <= sweep < lastSweep <= 0)
-    else:
-        add = (arc.sweep >= sweep > lastSweep >= 0)
-
-    if (add):
-        result.append(
-            Arc(
-                cx=arc.cx,
-                cy=arc.cy,
-                radius=arc.radius,
-                startAngle=arc.startAngle + lastSweep,
-                sweep=sweep - lastSweep
-            )
+    if (lastSweep != sweep):
+        newArc = Arc(
+            cx=arc.cx,
+            cy=arc.cy,
+            radius=arc.radius,
+            startAngle=arc.startAngle + lastSweep,
+            sweep=sweep - lastSweep
         )
+        newArc.intersects = intersects
+        result.append(newArc)
 
 
 class Circle(CommonMixin, GeometryMixin):
@@ -75,6 +83,7 @@ class Circle(CommonMixin, GeometryMixin):
         kwargs.radius : float
             The radius of the circle.
         """
+        # pylint: disable=invalid-name
         GeometryMixin.__init__(self)
 
         self.cx = float(kwargs.get("cx", 0))
@@ -86,7 +95,12 @@ class Circle(CommonMixin, GeometryMixin):
 
     def __eq__(self, other):
         """Compare this object to another."""
-        return (self.cx == other.cx) and (self.cy == other.cy) and (self.radius == other.radius)
+        return (
+            (other is not None) and
+            (floatCmp(self.cx, other.cx) == 0) and
+            (floatCmp(self.cy, other.cy) == 0) and
+            (floatCmp(self.radius, other.radius) == 0)
+        )
 
     def __repr__(self):
         """
@@ -147,24 +161,47 @@ class Circle(CommonMixin, GeometryMixin):
         """
         return self.radius >= math.hypot(x - self.cx, y - self.cy)
 
+    def geometryDifference(self, geometry):
+        """
+        Compute the intersections & differences between this region and the specified geometry.
+
+        Parameters
+        ----------
+        geometry : Arc | LineSegment
+            The geometry to compute the intersections & differences for
+
+        Returns
+        -------
+        Returns a list containing 1 or more geometries of the same type as the input.  The original
+        geometry will be segmented into separate sections based on where it intersects the circle.
+        An additional 'intersects' property will be added to each returned geometry portion to
+        indicate whether that portion intersects the circle or not.
+        """
+        if (isinstance(geometry, LineSegment)):
+            return self.lineSegmentDifference(geometry)
+
+        if (isinstance(geometry, Arc)):
+            return self.arcDifference(geometry)
+
+        raise TypeError("geometry object must be an Arc or a LineSegment")
+
     def lineSegmentDifference(self, lineSegment):
         """
-        Compute the difference between this region and the specified LineSegment.
+        Compute the intersections & differences between this region and the specified LineSegment.
 
         https://mathworld.wolfram.com/Circle-LineIntersection.html
 
         Parameters
         ----------
         lineSegment : LineSegment
-            The segment to compute the difference for
+            The segment to compute the intersections & differences for
 
         Returns
         -------
-        Returns a list containing 0, 1 or 2 LineSegments.  When the LineSegment is completely
-        contained in this region, the list will be empty.  If the LineSegment and region do
-        not overlap at all, or one end of the LineSegment is inside this region, then a single
-        LineSegment is returned.  If the LineSegment and region overlap, but both ends of the
-        LineSegment fall outside the region, then two LineSegments are returned.
+        Returns a list containing 1 or more LineSegments.  The original LineSegment will be
+        segmented into separate sections based on where it intersects the circle.  An
+        additional 'intersects' property will be added to each returned line segment to indicate
+        whether that portion of the segment intersects the circle or not.
         """
         dx = lineSegment.x2 - lineSegment.x1
         dy = lineSegment.y2 - lineSegment.y1
@@ -180,7 +217,9 @@ class Circle(CommonMixin, GeometryMixin):
 
         # print(" >>> dr2=", dr2, ", D=", D, ", discriminant=", discriminant)
         if (discriminant <= 0):
-            return [lineSegment]   # No intersection (<0) or line is tangent (=0)
+            lineSeg = LineSegment(lineSegment)
+            lineSeg.intersects = False
+            return [lineSeg]   # No intersection (<0) or line is tangent (=0)
 
         # Two possible points of intersection
         srDisc = math.sqrt(discriminant)
@@ -198,8 +237,8 @@ class Circle(CommonMixin, GeometryMixin):
 
         result = []
 
-        dp1 = normalizedDotProd(lineSegment, x1, y1)
-        dp2 = normalizedDotProd(lineSegment, x2, y2)
+        dp1 = normalized_dot_prod(lineSegment, x1, y1)
+        dp2 = normalized_dot_prod(lineSegment, x2, y2)
         if (dp2 < dp1):
             dp1, dp2 = dp2, dp1
             x1, y1, x2, y2 = x2, y2, x1, y1
@@ -208,15 +247,44 @@ class Circle(CommonMixin, GeometryMixin):
         p2Match = 0 <= dp2 <= 1
 
         if p1Match or p2Match:
-            if (p1Match):
-                if (abs(lineSegment.x1 - x1) > EPSILON) or (abs(lineSegment.y1 - y1) > EPSILON):
-                    result.append(LineSegment(x1=lineSegment.x1, y1=lineSegment.y1, x2=x1, y2=y1))
+            ex1 = lineSegment.x1
+            ey1 = lineSegment.y1
+            ex2 = lineSegment.x2
+            ey2 = lineSegment.y2
 
+            if (p1Match):
+                if (
+                    (floatCmp(lineSegment.x1 - x1, 0) != 0) or
+                    (floatCmp(lineSegment.y1 - y1, 0) != 0)
+                ):
+                    ex1 = x1
+                    ey1 = y1
+                    lineSeg = LineSegment(x1=lineSegment.x1, y1=lineSegment.y1, x2=x1, y2=y1)
+                    lineSeg.intersects = False
+                    result.append(lineSeg)
+
+            lineSeg2 = None
             if (p2Match):
-                if (abs(lineSegment.x2 - x2) > EPSILON) or (abs(lineSegment.y2 - y2) > EPSILON):
-                    result.append(LineSegment(x1=x2, y1=y2, x2=lineSegment.x2, y2=lineSegment.y2))
+                if (
+                    (floatCmp(lineSegment.x2 - x2, 0) != 0) or
+                    (floatCmp(lineSegment.y2 - y2, 0) != 0)
+                ):
+                    ex2 = x2
+                    ey2 = y2
+                    lineSeg2 = LineSegment(x1=x2, y1=y2, x2=lineSegment.x2, y2=lineSegment.y2)
+                    lineSeg2.intersects = False
+
+            if (floatCmp(ex2 - ex1, 0) != 0) or (floatCmp(ey2 - ey1, 0) != 0):
+                lineSeg = LineSegment(x1=ex1, y1=ey1, x2=ex2, y2=ey2)
+                lineSeg.intersects = True
+                result.append(lineSeg)
+
+            if (lineSeg2 is not None):
+                result.append(lineSeg2)
         else:
-            result.append(lineSegment)
+            lineSeg = LineSegment(lineSegment)
+            lineSeg.intersects = False
+            result.append(lineSeg)
 
         return result
 
@@ -224,6 +292,20 @@ class Circle(CommonMixin, GeometryMixin):
     # http://math.stackexchange.com/a/1367732
     # https://gist.github.com/jupdike/bfe5eb23d1c395d8a0a1a4ddd94882ac
     def computeArcIntAngles(self, arc):
+        """
+        Compute the sweep angles at which an arc intersects this circle.
+
+        Parameters
+        ----------
+        arc : Arc
+            The arc for which to compute the sweep angles of intersection.
+
+        Returns
+        -------
+        List of float
+            List of sweep angles at which the arc intersects the circle, or an empty list
+            if there is no intersection.
+        """
         centerdx = self.cx - arc.cx
         centerdy = self.cy - arc.cy
 
@@ -237,7 +319,9 @@ class Circle(CommonMixin, GeometryMixin):
 
         r2r2 = self.radius * self.radius - arc.radius * arc.radius
         a = r2r2 / (2 * R2)
-        c = math.sqrt(2 * (self.radius * self.radius + arc.radius * arc.radius) / R2 - (r2r2 * r2r2) / R4 - 1)
+        c = math.sqrt(
+            2 * (self.radius * self.radius + arc.radius * arc.radius) / R2 - (r2r2 * r2r2) / R4 - 1
+        )
 
         fx = (self.cx + arc.cx) / 2 + a * (arc.cx - self.cx)
         gx = c * (arc.cy - self.cy) / 2
@@ -253,10 +337,10 @@ class Circle(CommonMixin, GeometryMixin):
 
         # note if gy == 0 and gx == 0 then the circles are tangent and there is only one solution
         # In that case, we simply return an empty list
-        
-        #print(">>> gx=", gx, ", gy=", gy)
-        #print(">>> p1=(", ix1, ", ", iy1, ") angle=", math.atan2(iy1 - arc.cy, ix1 - arc.cx))
-        #print(">>> p2=(", ix2, ", ", iy2, ") angle=", math.atan2(iy2 - arc.cy, ix2 - arc.cx))
+
+        # print(">>> gx=", gx, ", gy=", gy)
+        # print(">>> p1=(", ix1, ", ", iy1, ") angle=", math.atan2(iy1 - arc.cy, ix1 - arc.cx))
+        # print(">>> p2=(", ix2, ", ", iy2, ") angle=", math.atan2(iy2 - arc.cy, ix2 - arc.cx))
 
         if (gx != 0) or (gy != 0):
             angle = math.atan2(iy1 - arc.cy, ix1 - arc.cx)
@@ -280,22 +364,15 @@ class Circle(CommonMixin, GeometryMixin):
 
         Returns
         -------
-        Returns a list containing 0, 1 or 2 Arcs.  When the Arc is completely contained in
-        this region, the list will be empty.  If the Arc and region do not overlap at all,
-        or one end of the Arc is inside this region, then a single Arc is returned.  If the
-        Arc and region overlap, but both ends of the Arc fall outside the region, then two
-        Arcs are returned.
+        Returns a list containing 1 or more Arcs based on the input.  The original Arc
+        will be segmented into separate sections based on where it intersects the circle.
+        An additional 'intersects' property will be added to each returned Arc portion to
+        indicate whether that portion intersects the circle or not.
         """
         # May intersect in 0, 1 or 2 points
         anglesOfIntersection = self.computeArcIntAngles(arc)
 
-        include = not self.containsPoint(arc.x1, arc.y1)
-
-        if (not anglesOfIntersection):
-            if (include):
-                return [arc]  # No intersection
-            else:
-                return []     # Contained
+        intersects = self.containsPoint(arc.x1, arc.y1)
 
         # Convert to sweep angles relative to the arc's startAngle, sort the result and iterate
         anglesOfIntersection = sorted(
@@ -305,17 +382,14 @@ class Circle(CommonMixin, GeometryMixin):
 
         lastSweep = 0
 
-        #print(">>> include=", include, ", anglesOfIntersection=", anglesOfIntersection)
+        # print(">>> intersects=", intersects, ", anglesOfIntersection=", anglesOfIntersection)
 
         result = []
         for sweep in anglesOfIntersection:
-            if (include):
-                append_arc_segment(result, arc, lastSweep, sweep)
-
-            include = not include
+            append_arc_segment(result, arc, lastSweep, sweep, intersects)
+            intersects = not intersects
             lastSweep = sweep
 
-        if (include):
-            append_arc_segment(result, arc, lastSweep, arc.sweep)
+        append_arc_segment(result, arc, lastSweep, arc.sweep, intersects)
 
         return result

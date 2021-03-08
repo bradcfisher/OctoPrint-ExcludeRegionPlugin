@@ -6,7 +6,7 @@ from __future__ import absolute_import, division
 import math
 
 from .CommonMixin import CommonMixin
-from .GeometryMixin import GeometryMixin, ROUND_PLACES
+from .GeometryMixin import GeometryMixin, ROUND_PLACES, floatCmp
 from .Rectangle import Rectangle
 
 PI = math.pi
@@ -177,7 +177,7 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
 
         if (not lenient):
             radius2 = math.hypot(dx2, dy2)
-            if (round(radius - radius2, ROUND_PLACES) != 0):
+            if (floatCmp(radius - radius2, 0) != 0):
                 raise ValueError("End points must be the same distance from the center")
 
         startAngle = math.atan2(dy1, dx1)
@@ -217,12 +217,15 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
         sweep = normalize_radians(endAngle - startAngle) - (TWO_PI if clockwise else 0)
         return Arc(cx=cx, cy=cy, radius=radius, startAngle=startAngle, sweep=sweep)
 
-    def __init__(self, **kwargs):
+    def __init__(self, *args, **kwargs):
         """
         Initialize the instance properties.
 
         Parameters
         ----------
+        toCopy :  Arc
+            If provided, the new instance will be a clone of this instance.
+
         kwargs.cx : float
             The x coordinate of the center point.
         kwargs.cy : float
@@ -234,17 +237,26 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
         kwargs.sweep : float
             The angle sweep of the arc
         """
+        # pylint: disable=invalid-name
         GeometryMixin.__init__(self)
 
-        # pylint: disable=invalid-name
+        if (args):
+            other = args[0]
+            self.cx = other.cx
+            self.cy = other.cy
+            self.radius = other.radius
+            self.startAngle = normalize_radians(other.startAngle)
+            self.sweep = other.sweep
+        else:
+            # pylint: disable=invalid-name
+            self.cx = float(kwargs.get("cx", 0))
+            self.cy = float(kwargs.get("cy", 0))
+            self.radius = float(kwargs.get("radius", 1))
+            self.startAngle = normalize_radians(float(kwargs.get("startAngle", 0)))
+            self.sweep = float(kwargs.get("sweep", 0))
 
-        self.cx = float(kwargs.get("cx", 0))
-        self.cy = float(kwargs.get("cy", 0))
-        self.radius = float(kwargs.get("radius", 1))
         if (self.radius <= 0):
             raise ValueError("The radius must be greater than 0")
-        self.startAngle = normalize_radians(float(kwargs.get("startAngle", 0)))
-        self.sweep = float(kwargs.get("sweep", 0))
         if (self.sweep < 0):
             self.sweep = -normalize_radians(-self.sweep)
             if (self.sweep == 0):
@@ -259,13 +271,13 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
     def compute(self):
         """Compute values for the properties derived from the initial inputs."""
         # Start point
-        self.x1 = round(math.cos(self.startAngle) * self.radius + self.cx, ROUND_PLACES)
-        self.y1 = round(math.sin(self.startAngle) * self.radius + self.cy, ROUND_PLACES)
+        self.x1 = math.cos(self.startAngle) * self.radius + self.cx
+        self.y1 = math.sin(self.startAngle) * self.radius + self.cy
 
         # End point
         self.endAngle = self.startAngle + self.sweep
-        self.x2 = round(math.cos(self.endAngle) * self.radius + self.cx, ROUND_PLACES)
-        self.y2 = round(math.sin(self.endAngle) * self.radius + self.cy, ROUND_PLACES)
+        self.x2 = math.cos(self.endAngle) * self.radius + self.cx
+        self.y2 = math.sin(self.endAngle) * self.radius + self.cy
 
         self.clockwise = (self.sweep < 0)
 
@@ -354,7 +366,12 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
         return (sweep >= self.sweep) if (self.clockwise) else (sweep <= self.sweep)
 
     def roundValues(self, numPlaces=ROUND_PLACES):
-        """Round internal values."""
+        """
+        Round internal values.
+
+        The following values are rounded and used to recompute the others:
+        - cx, cy, radius, startAngle, sweep
+        """
         self.cx = round(self.cx, numPlaces)
         self.cy = round(self.cy, numPlaces)
         self.radius = round(self.radius, numPlaces)
@@ -366,11 +383,12 @@ class Arc(CommonMixin, GeometryMixin):  # pylint: disable=too-many-instance-attr
     def __eq__(self, other):
         """Compare this object to another."""
         return (
-            (self.cx == other.cx) and
-            (self.cy == other.cy) and
-            (self.radius == other.radius) and
-            (self.startAngle == other.startAngle) and
-            (self.sweep == other.sweep)
+            (other is not None) and
+            (floatCmp(self.cx, other.cx) == 0) and
+            (floatCmp(self.cy, other.cy) == 0) and
+            (floatCmp(self.radius, other.radius) == 0) and
+            (floatCmp(self.startAngle, other.startAngle) == 0) and
+            (floatCmp(self.sweep, other.sweep) == 0)
         )
 
     def __repr__(self):

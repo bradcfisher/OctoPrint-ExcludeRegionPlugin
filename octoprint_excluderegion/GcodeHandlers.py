@@ -14,13 +14,13 @@ import math
 from .RetractionState import RetractionState
 from .AtCommandAction import ENABLE_EXCLUSION, DISABLE_EXCLUSION
 from .GcodeParser import GcodeParser
+from .Arc import Arc
+from .LineSegment import LineSegment
+from .GeometryMixin import floatCmp
 
 
 # A unit multiplier for converting logical units in inches to millimeters.
 INCH_TO_MM_FACTOR = 25.4
-
-# The length of individual generated arc segments.
-MM_PER_ARC_SEGMENT = 1
 
 TWO_PI = 2 * math.pi
 
@@ -56,147 +56,6 @@ class GcodeHandlers(object):
         self._logger = logger
         self.gcodeParser = GcodeParser()
 
-    def planArc(self, endX, endY, i, j, clockwise):  # pylint: disable=too-many-locals,invalid-name
-        """
-        Compute a sequence of moves approximating an arc (G2/G3).
-
-        This code is based on the arc planning logic in Marlin.
-
-        Parameters
-        ----------
-        endX : float
-            The final x axis position for the tool after the arc is processed, in logical units
-        endY : float
-            The final y axis position for the tool after the arc is processed, in logical units
-        i : float
-            Offset from the initial x axis position to the center point of the arc, in logical units
-        j : float
-            Offset from the initial y axis position to the center point of the arc, in logical units
-        clockwise : boolean
-            Whether this is a clockwise (G2) or counter-clockwise (G3) arc.
-
-        Returns
-        -------
-        List of x,y pairs
-            List containing an even number of float values describing coordinate pairs in logical
-            units that approximate the arc.  Each value at an even index (0, 2, 4, etc) is an x
-            coordinate, and each odd indexed value is a y coordinate.  The first point is comprised
-            of the x value at index 0 and the y value at index 1, and so on.
-        """
-        x = self.state.position.X_AXIS.nativeToLogical()
-        y = self.state.position.Y_AXIS.nativeToLogical()
-
-        radius = math.hypot(i, j)
-
-        # CCW angle of rotation between position and target from the circle center.
-        centerX = x + i
-        centerY = y + j
-        rtX = endX - centerX
-        rtY = endY - centerY
-        angularTravel = math.atan2(-i * rtY + j * rtX, -i * rtX - j * rtY)
-        if (angularTravel < 0):
-            angularTravel += TWO_PI
-        if (clockwise):
-            angularTravel -= TWO_PI
-
-        # Make a circle if the angular travel is 0 and the target is current position
-        if (angularTravel == 0) and (x == endX) and (y == endY):
-            angularTravel = TWO_PI
-
-        # Compute the number of segments to produce based on the length of the arc
-        arcLength = abs(angularTravel) * radius
-        numSegments = int(math.ceil(arcLength / MM_PER_ARC_SEGMENT))
-
-        angle = math.atan2(-j, -i)
-        angularIncrement = angularTravel / numSegments
-
-        rval = []
-        for dummy in range(1, numSegments):
-            angle += angularIncrement
-            rval += [centerX + math.cos(angle) * radius, centerY + math.sin(angle) * radius]
-
-        rval += [endX, endY]
-
-        self._logger.debug(
-            "planArc(endX=%s, endY=%s, i=%s, j=%s, clockwise=%s) = %s",
-            endX, endY, i, j, clockwise, rval
-        )
-
-        return rval
-
-    def computeArcCenterOffsets(
-            self, endX, endY, radius, clockwise
-    ):  # pylint: disable=too-many-locals
-        """
-        Compute the i & j offsets for an arc given a radius, direction and ending point.
-
-        Parameters
-        ----------
-        endX : float
-            The ending X coordinate provided to the GCode command, in logical units.
-        endY : float
-            The ending Y coordinate provided to the GCode command, in logical units.
-        radius : float
-            The radius of the arc to compute the center point offset for, in logical units.
-            A positive value will result in the shortest arc proceeding in the specified direction,
-            a negative radius will mirror the calculated center point on the chord between the two
-            endpoints to produce the longer arc between the two endpoints.  A value of 0 is not
-            permitted.
-        clockwise : boolean
-            Whether the arc proceeds in a clockwise or counter-clockwise direction.
-
-        Returns
-        -------
-        pair(i, j)
-            The computed center point offset position, in logical units relative to the current
-            position.  Will be (0,0) if radius == 0 or the distance between the end points is
-            greater that twice the radius.
-        """
-        # pylint: disable=invalid-name
-        position = self.state.position
-        i = 0
-        j = 0
-        p1 = position.X_AXIS.nativeToLogical()
-        q1 = position.Y_AXIS.nativeToLogical()
-        p2 = endX
-        q2 = endY
-
-        # radius cannot be 0, and the two end points cannot be identical
-        if (radius and (p1 != p2 or q1 != q2)):
-            # clockwise -1/1, counterclockwise 1/-1
-            e = -1 if (clockwise ^ (radius < 0)) else 1
-
-            # X and Y differences
-            deltaX = p2 - p1
-            deltaY = q2 - q1
-
-            # Linear distance between the points
-            dist = math.hypot(deltaX, deltaY)
-            halfDist = dist / 2
-
-            # Midpoint of chord between the two endpoints
-            midX = (p1 + p2) / 2
-            midY = (q1 + q2) / 2
-
-            # radius cannot be less than half the distance between the two end points
-            if (halfDist <= abs(radius)):
-                # Distance to the arc pivot point
-                h = math.sqrt(radius*radius - halfDist*halfDist)
-
-                # Slope of the perpendicular bisector
-                sx = -deltaY / dist
-                sy = -deltaX / dist
-
-                # Pivot point of the arc
-                centerX = midX + e * h * sx
-                centerY = midY + e * h * sy
-
-                # Offset to pivot point
-                i = centerX - p1
-                j = centerY - q1
-
-        return (i, j)
-
     def handleGcode(self, cmd, gcode, subcode=None):
         """
         Inspects the provided gcode command and performs any necessary processing.
@@ -230,8 +89,11 @@ class GcodeHandlers(object):
           E - amount to extrude while moving
           F - feed rate to accelerate to while moving
         """
+        position = self.state.position
         extruderPosition = None
         feedRate = None
+        x0 = position.X_AXIS.nativeToLogical()
+        y0 = position.Y_AXIS.nativeToLogical()
         x = None
         y = None
         z = None
@@ -249,7 +111,14 @@ class GcodeHandlers(object):
                 elif (label == "Z"):
                     z = value
 
-        return self.state.processLinearMoves(cmd, extruderPosition, feedRate, z, x, y)
+        lineSegment = LineSegment(
+            x1=x0,
+            y1=y0,
+            x2=x0 if (x is None) else x,
+            y2=y0 if (y is None) else y
+        )
+
+        return self.state.processMove(cmd, extruderPosition, feedRate, lineSegment, x, y, z)
 
     def _handle_G1(self, cmd, gcode, subcode=None):  # pylint: disable=unused-argument,invalid-name
         """
@@ -274,8 +143,8 @@ class GcodeHandlers(object):
 
         extruderPosition = None
         feedRate = None
-        x = position.X_AXIS.nativeToLogical()
-        y = position.Y_AXIS.nativeToLogical()
+        x = x0 = position.X_AXIS.nativeToLogical()
+        y = y0 = position.Y_AXIS.nativeToLogical()
         z = position.Z_AXIS.nativeToLogical()
         radius = None
         i = 0
@@ -300,13 +169,26 @@ class GcodeHandlers(object):
                 elif (label == "J"):
                     j = value
 
-        # Based on Marlin 1.1.8
-        if (radius is not None):
-            (i, j) = self.computeArcCenterOffsets(x, y, radius, clockwise)
+        try:
+            if (radius is not None):
+                arc = Arc.fromRadiusP1P2Clockwise(
+                    radius, x0, y0, x, y, clockwise
+                )
+            elif (i or j):
+                arc = Arc.fromCenterP1P2Clockwise(
+                    x0 + i, y0 + j, x0, y0, x, y, clockwise
+                )
+            else:
+                arc = None
 
-        if (i or j):
-            xyPairs = self.planArc(x, y, i, j, clockwise)
-            return self.state.processLinearMoves(cmd, extruderPosition, feedRate, z, *xyPairs)
+            if (arc is not None):
+                return self.state.processMove(cmd, extruderPosition, feedRate, arc, x, y, z)
+        except ValueError as ex:
+            self._logger.info(
+                "Unable to construct Arc from input '%s': from=[%s, %s], to=[X=%s, Y=%s, Z=%s]," +
+                " E=%s, F=%s, R=%s, I=%s, J=%s: %s",
+                cmd, x0, y0, x, y, z, extruderPosition, feedRate, radius, i, j, ex
+            )
 
         return None
 
