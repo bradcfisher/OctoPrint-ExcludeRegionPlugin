@@ -370,3 +370,10 @@ This command is useful to re-enable exclusion processing at the end of start and
 The default configuration for this command permits specifying additional arguments following the
 `enable`/`on` parameter keyword.  For example:  `@ExcludeRegion enable After start Gcode`.
 This is purely for documentation/logging purposes and is otherwise ignored by the plugin.
+
+## Contributors
+
+Thanks to the following for contributing enhancements to the code
+
+* [7FM](https://github.com/7FM)
+* [jaketri](https://github.com/jaketri)

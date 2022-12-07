@@ -1,6 +1,6 @@
 
 # python2 or python3
-PYTHON=python2
+PYTHON=python3
 
 SOURCE_DIR=octoprint_excluderegion
 TEST_DIR=test
@@ -136,20 +136,22 @@ $(COVERAGE_FILE): .coveragerc $(TESTENV_DEPS_INSTALLED) $(SOURCE_FILES) $(TEST_F
 	mkdir -p $(COVERAGE_DIR)
 	echo -n "$(TEST_PATTERN)" > $(COVERAGE_PATTERN_FILE)
 	-. $(ACTIVATE_TESTENV) \
-		&& coverage run $(UNITTEST)
+		&& COVERAGE_FILE="$(COVERAGE_FILE)" coverage run $(UNITTEST)
 
 coverage: check-coverage-pattern $(COVERAGE_FILE) clean-coverage-report
 	. $(ACTIVATE_TESTENV) \
-		&& coverage report --fail-under 80
+		&& COVERAGE_FILE="$(COVERAGE_FILE)" coverage report --fail-under 80
 
 clean-coverage-report:
 	-rm -f $(COVERAGE_DIR)/report.txt
 	-rm -rf $(COVERAGE_DIR)/html
 
 coverage-report: check-coverage-pattern $(COVERAGE_FILE)
-	-. $(ACTIVATE_TESTENV) && coverage report > $(COVERAGE_DIR)/report.txt
+	-. $(ACTIVATE_TESTENV) \
+    && COVERAGE_FILE="$(COVERAGE_FILE)" coverage report > $(COVERAGE_DIR)/report.txt
 	-rm -rf $(COVERAGE_DIR)/html
-	-. $(ACTIVATE_TESTENV) && coverage html
+	-. $(ACTIVATE_TESTENV) \
+    && COVERAGE_FILE="$(COVERAGE_FILE)" coverage html -d $(COVERAGE_DIR)/html
 
 doc: $(TESTENV_DEPS_INSTALLED) $(SOURCE_FILES) $(DOC_FILES)
 	rm -rf $(BUILD_DIR)/doc
