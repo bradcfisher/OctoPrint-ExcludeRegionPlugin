@@ -5,7 +5,8 @@ from __future__ import absolute_import, division
 
 import logging
 import time
-from collections import OrderedDict, Mapping
+from collections import OrderedDict
+from collections.abc import Mapping
 
 from .ExcludedGcode import EXCLUDE_EXCEPT_FIRST, EXCLUDE_EXCEPT_LAST, EXCLUDE_MERGE
 from .Position import Position

@@ -1,4 +1,12 @@
 
+## [0.3.1] - 2022/12/06
+
+Long overdue update to make compatible with recent versions of Python 3.
+
+- Merged [#64] Python 3.10 compatibility.  Thanks to [jaketri](https://github.com/jaketri)
+- Merged [#59] Auto bumped dependency version thanks to Dependabot
+
+
 ## [0.3.0] - 2020/11/17
 
 The primary focus of this release is ensuring Python 3 compatibility.  There are also a couple of
