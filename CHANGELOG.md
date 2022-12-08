@@ -1,4 +1,9 @@
 
+## [0.3.2] - 2022/12/07
+
+Bumped version to avoid conflict with https://github.com/katiekloss/OctoPrint-ExcludeRegion/releases/tag/v0.3.1
+
+
 ## [0.3.1] - 2022/12/06
 
 Long overdue update to make compatible with recent versions of Python 3.
