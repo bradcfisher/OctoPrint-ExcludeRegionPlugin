@@ -8,5 +8,5 @@ sphinx==1.8.5
 configparser==4.0.2
 pylint==1.9.5
 pylama==7.7.1
-Pygments==2.7.4
+Pygments==2.15.0
 sphinxcontrib_websupport==1.1.2
