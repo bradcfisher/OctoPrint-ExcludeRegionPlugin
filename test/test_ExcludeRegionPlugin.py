@@ -15,7 +15,7 @@ from octoprint.settings import settings as octoprintSettings
 from octoprint_excluderegion import \
     ExcludeRegionPlugin, ExcludeRegionState, GcodeHandlers, \
     RectangularRegion, CircularRegion, \
-    EXCLUDED_REGIONS_CHANGED
+    EXCLUDED_REGIONS_CHANGED, _needs_legacy_gcode_viewer_renderer
 
 from .utils import TestCase
 
@@ -156,6 +156,22 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
 
         self._test_get_assets("1.3.9", additional_validations)
 
+    def test_get_assets_octoprint1_3_10rc0(self):
+        """Test the get_assets method under OctoPrint 1.3.10rc0."""
+        def additional_validations(result):
+            self.assertEqual(len(result["js"]), 2, "Two js assets should be returned")
+            self.assertEqual(len(result["css"]), 1, "One CSS asset should be returned")
+
+        self._test_get_assets("1.3.10rc0", additional_validations)
+
+    def test_get_assets_octoprint1_3_10rc1(self):
+        """Test the get_assets method under OctoPrint 1.3.10rc1."""
+        def additional_validations(result):
+            self.assertEqual(len(result["js"]), 1, "One js asset should be returned")
+            self.assertEqual(len(result["css"]), 1, "One CSS asset should be returned")
+
+        self._test_get_assets("1.3.10rc1", additional_validations)
+
     def test_get_assets_octoprint1_3_10(self):
         """Test the get_assets method under OctoPrint 1.3.10 or newer."""
         def additional_validations(result):
@@ -163,6 +179,20 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
             self.assertEqual(len(result["css"]), 1, "One CSS asset should be returned")
 
         self._test_get_assets("1.3.10", additional_validations)
+
+    def test_needs_legacy_gcode_viewer_renderer(self):
+        """Test the OctoPrint version check used by get_assets."""
+        self.assertTrue(_needs_legacy_gcode_viewer_renderer("1.3.9"))
+        self.assertTrue(_needs_legacy_gcode_viewer_renderer("1.3.10dev1"))
+        self.assertTrue(_needs_legacy_gcode_viewer_renderer("1.3.10a1"))
+        self.assertTrue(_needs_legacy_gcode_viewer_renderer("1.3.10b1"))
+        self.assertTrue(_needs_legacy_gcode_viewer_renderer("1.3.10rc0"))
+
+        self.assertFalse(_needs_legacy_gcode_viewer_renderer("1.3.10rc1"))
+        self.assertFalse(_needs_legacy_gcode_viewer_renderer("1.3.10rc2"))
+        self.assertFalse(_needs_legacy_gcode_viewer_renderer("1.3.10"))
+        self.assertFalse(_needs_legacy_gcode_viewer_renderer("1.4.0"))
+        self.assertFalse(_needs_legacy_gcode_viewer_renderer("unparseable"))
 
     # ~~ TemplatePlugin
 

@@ -38,8 +38,6 @@ import re
 import flask
 from flask_login import current_user
 
-import pkg_resources
-
 import octoprint.plugin
 from octoprint.events import Events
 from octoprint.settings import settings
@@ -62,6 +60,43 @@ EXCLUDED_REGIONS_CHANGED = "ExcludedRegionsChanged"
 LOG_MODE_OCTOPRINT = "octoprint"
 LOG_MODE_DEDICATED = "dedicated"
 LOG_MODE_BOTH = "both"
+
+GCODE_VIEWER_RENDERER_FIX_VERSION = (1, 3, 10)
+PRERELEASE_ORDER = {
+    "dev": 0,
+    "a": 1,
+    "b": 2,
+    "rc": 3
+}
+
+
+def _needs_legacy_gcode_viewer_renderer(version):
+    """Return whether an OctoPrint version predates the bundled gcode viewer fix."""
+    match = re.match(r"^(\d+)\.(\d+)\.(\d+)(?:(dev|a|b|rc)(\d+))?", version)
+
+    if (match is None):
+        return False
+
+    release = (
+        int(match.group(1)),
+        int(match.group(2)),
+        int(match.group(3))
+    )
+
+    if (release != GCODE_VIEWER_RENDERER_FIX_VERSION):
+        return release < GCODE_VIEWER_RENDERER_FIX_VERSION
+
+    prerelease = match.group(4)
+    if (prerelease is None):
+        return False
+
+    prereleaseNumber = int(match.group(5) or 0)
+    prereleaseOrder = PRERELEASE_ORDER.get(prerelease)
+
+    if (prereleaseOrder is None):
+        return False
+
+    return (prereleaseOrder, prereleaseNumber) < (PRERELEASE_ORDER["rc"], 1)
 
 
 # pylint: disable=global-statement
@@ -162,12 +197,10 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
 
     def get_assets(self):
         """Define the static assets the plugin offers."""
-        octoprintVersion = pkg_resources.parse_version(octoprint.__version__)
-
         jsFiles = ["js/excluderegion.js"]
 
         # The modified gcode renderer is not needed for 1.3.10rc1 and above
-        if (octoprintVersion < pkg_resources.parse_version("1.3.10rc1")):
+        if (_needs_legacy_gcode_viewer_renderer(octoprint.__version__)):
             self._logger.info(
                 "Octoprint {} is pre 1.3.10rc1, including renderer.js to override gcode viewer",
                 octoprint.__display_version__
