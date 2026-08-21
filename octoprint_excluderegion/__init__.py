@@ -341,7 +341,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
 
     def on_api_command(self, command, data):
         """Route API requests to their implementations."""
-        if current_user.is_anonymous():
+        if current_user.is_anonymous:
             return "Insufficient rights", 403
 
         self._logger.debug("API command received: %s", data)

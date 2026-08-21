@@ -194,7 +194,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch('octoprint_excluderegion.current_user')
     def test_on_api_command_unauthenticated(self, mockCurrentUser):
         """Test on_api_command when the current user is not authenticated."""
-        mockCurrentUser.is_anonymous.return_value = True
+        mockCurrentUser.is_anonymous = True
 
         unit = create_plugin_instance()
 
@@ -209,7 +209,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch('octoprint_excluderegion.current_user')
     def test_on_api_command_unknownCommand(self, mockCurrentUser):
         """Test on_api_command when an invalid command is provided."""
-        mockCurrentUser.is_anonymous.return_value = False
+        mockCurrentUser.is_anonymous = False
 
         unit = create_plugin_instance()
 
@@ -224,7 +224,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch('octoprint_excluderegion.current_user')
     def test_on_api_command_addExcludeRegion_RectangularRegion(self, mockCurrentUser):
         """Test on_api_command for the 'addExcludeRegion' command and a RectangularRegion."""
-        mockCurrentUser.is_anonymous.return_value = False
+        mockCurrentUser.is_anonymous = False
 
         unit = create_plugin_instance()
         with mock.patch.object(unit, '_handleAddExcludeRegion') as handlerMock:
@@ -247,7 +247,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch('octoprint_excluderegion.current_user')
     def test_on_api_command_addExcludeRegion_CircularRegion(self, mockCurrentUser):
         """Test on_api_command for the 'addExcludeRegion' command and a CircularRegion."""
-        mockCurrentUser.is_anonymous.return_value = False
+        mockCurrentUser.is_anonymous = False
 
         unit = create_plugin_instance()
         with mock.patch.object(unit, '_handleAddExcludeRegion') as handlerMock:
@@ -269,7 +269,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch('octoprint_excluderegion.current_user')
     def test_on_api_command_addExcludeRegion_unsupportedType(self, mockCurrentUser):
         """Test on_api_command when an invalid type is provided for 'addExcludeRegion'."""
-        mockCurrentUser.is_anonymous.return_value = False
+        mockCurrentUser.is_anonymous = False
 
         unit = create_plugin_instance()
         with mock.patch.object(unit, '_handleAddExcludeRegion') as handlerMock:
@@ -290,7 +290,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch('octoprint_excluderegion.current_user')
     def test_on_api_command_updateExcludeRegion_RectangularRegion(self, mockCurrentUser):
         """Test on_api_command for the 'updateExcludeRegion' command and a RectangularRegion."""
-        mockCurrentUser.is_anonymous.return_value = False
+        mockCurrentUser.is_anonymous = False
 
         unit = create_plugin_instance()
         with mock.patch.object(unit, '_handleUpdateExcludeRegion') as handlerMock:
@@ -313,7 +313,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch('octoprint_excluderegion.current_user')
     def test_on_api_command_updateExcludeRegion_CircularRegion(self, mockCurrentUser):
         """Test the on_api_command method for the 'updateExcludeRegion' command."""
-        mockCurrentUser.is_anonymous.return_value = False
+        mockCurrentUser.is_anonymous = False
 
         unit = create_plugin_instance()
         with mock.patch.object(unit, '_handleUpdateExcludeRegion') as handlerMock:
@@ -335,7 +335,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch('octoprint_excluderegion.current_user')
     def test_on_api_command_updateExcludeRegion_unsupportedType(self, mockCurrentUser):
         """Test on_api_command when an invalid type is provided for 'updateExcludeRegion'."""
-        mockCurrentUser.is_anonymous.return_value = False
+        mockCurrentUser.is_anonymous = False
 
         unit = create_plugin_instance()
         with mock.patch.object(unit, '_handleUpdateExcludeRegion') as handlerMock:
@@ -356,7 +356,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch('octoprint_excluderegion.current_user')
     def test_on_api_command_deleteExcludeRegion(self, mockCurrentUser):
         """Test on_api_command for the 'deleteExcludeRegion' command."""
-        mockCurrentUser.is_anonymous.return_value = False
+        mockCurrentUser.is_anonymous = False
 
         unit = create_plugin_instance()
         with mock.patch.object(unit, '_handleDeleteExcludeRegion') as handlerMock:
@@ -375,7 +375,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch.multiple('octoprint_excluderegion', current_user=mock.DEFAULT, flask=mock.DEFAULT)
     def test_on_api_get_unauthenticated(self, current_user, flask):  # pylint: disable=invalid-name
         """Test the on_api_get method for an unauthenticated user."""
-        current_user.is_anonymous.return_value = True
+        current_user.is_anonymous = True
         flask.jsonify.return_value = "expectedResult"
 
         testRegion = CircularRegion(x=0, y=0, radius=10, id="myId")
@@ -393,7 +393,7 @@ class ExcludeRegionPluginTests(TestCase):  # pylint: disable=too-many-public-met
     @mock.patch.multiple('octoprint_excluderegion', current_user=mock.DEFAULT, flask=mock.DEFAULT)
     def test_on_api_get_authenticated(self, current_user, flask):  # pylint: disable=invalid-name
         """Test the on_api_get method for an authenticated user."""
-        current_user.is_anonymous.return_value = False
+        current_user.is_anonymous = False
         flask.jsonify.return_value = "expectedResult"
 
         testRegion = CircularRegion(x=0, y=0, radius=10, id="myId")
