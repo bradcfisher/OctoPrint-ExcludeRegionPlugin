@@ -4,9 +4,13 @@
 from __future__ import absolute_import
 from builtins import str
 
-import collections
 import unittest
 import warnings
+
+try:
+    from collections.abc import Mapping
+except ImportError:  # Python 2
+    from collections import Mapping
 
 from callee import Matcher
 
@@ -83,7 +87,7 @@ class TestCase(unittest.TestCase):
         AssertionError
             If the specified value is not a dictionary-like object.
         """
-        if (not isinstance(value, collections.Mapping)):
+        if (not isinstance(value, Mapping)):
             raise AssertionError(self._msg(value, "Value is not a dictionary", msg))
 
     def assertIsString(self, value, msg=None):
@@ -136,7 +140,7 @@ class TestCase(unittest.TestCase):
 
         msg = self._msg(value, "Object properties do not match expectations", msg)
 
-        if (isinstance(value, collections.Mapping)):
+        if (isinstance(value, Mapping)):
             propertiesDict = value  # Already a dict
         else:
             propertiesDict = vars(value)
