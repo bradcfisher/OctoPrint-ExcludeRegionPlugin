@@ -38,11 +38,10 @@ import re
 import flask
 from flask_login import current_user
 
-import pkg_resources
-
 import octoprint.plugin
 from octoprint.events import Events
 from octoprint.settings import settings
+from octoprint.util.version import get_comparable_version
 
 from .GcodeHandlers import GcodeHandlers
 from .ExcludeRegionState import ExcludeRegionState
@@ -162,12 +161,12 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
 
     def get_assets(self):
         """Define the static assets the plugin offers."""
-        octoprintVersion = pkg_resources.parse_version(octoprint.__version__)
+        octoprintVersion = get_comparable_version(octoprint.__version__)
 
         jsFiles = ["js/excluderegion.js"]
 
         # The modified gcode renderer is not needed for 1.3.10rc1 and above
-        if (octoprintVersion < pkg_resources.parse_version("1.3.10rc1")):
+        if (octoprintVersion < get_comparable_version("1.3.10rc1")):
             self._logger.info(
                 "Octoprint {} is pre 1.3.10rc1, including renderer.js to override gcode viewer",
                 octoprint.__display_version__
