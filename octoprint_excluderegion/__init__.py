@@ -272,6 +272,12 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
 
     # ~~ SimpleApiPlugin
 
+    def is_api_protected(self):
+        """
+        Check authentication on API calls
+        """
+        return True
+
     def get_api_commands(self):
         """
         Define the POST command API endpoints for the plugin.
