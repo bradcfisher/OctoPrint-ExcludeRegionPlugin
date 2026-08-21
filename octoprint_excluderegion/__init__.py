@@ -186,6 +186,12 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
             dict(type="settings", custom_bindings=True)
         ]
 
+    def is_template_autoescaped(self):
+        """
+        Enable template autoescaping
+        """
+        return True
+
     # ~~ SettingsPlugin
 
     def get_settings_defaults(self):
