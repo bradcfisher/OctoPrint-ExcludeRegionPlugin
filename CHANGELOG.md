@@ -1,3 +1,7 @@
+## [0.3.3] - 2026/09/01
+
+Merged [#83] Octoprint 2.0.0 fixes - Thanks to [jacopotediosi](https://github.com/jacopotediosi) for the contribution!
+
 
 ## [0.3.2] - 2022/12/07
 
