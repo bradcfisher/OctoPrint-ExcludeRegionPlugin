@@ -38,11 +38,10 @@ import re
 import flask
 from flask_login import current_user
 
-import pkg_resources
-
 import octoprint.plugin
 from octoprint.events import Events
 from octoprint.settings import settings
+from octoprint.util.version import get_comparable_version
 
 from .GcodeHandlers import GcodeHandlers
 from .ExcludeRegionState import ExcludeRegionState
@@ -162,12 +161,12 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
 
     def get_assets(self):
         """Define the static assets the plugin offers."""
-        octoprintVersion = pkg_resources.parse_version(octoprint.__version__)
+        octoprintVersion = get_comparable_version(octoprint.__version__)
 
         jsFiles = ["js/excluderegion.js"]
 
         # The modified gcode renderer is not needed for 1.3.10rc1 and above
-        if (octoprintVersion < pkg_resources.parse_version("1.3.10rc1")):
+        if (octoprintVersion < get_comparable_version("1.3.10rc1")):
             self._logger.info(
                 "Octoprint {} is pre 1.3.10rc1, including renderer.js to override gcode viewer",
                 octoprint.__display_version__
@@ -186,6 +185,12 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
         return [
             dict(type="settings", custom_bindings=True)
         ]
+
+    def is_template_autoescaped(self):
+        """
+        Enable template autoescaping
+        """
+        return True
 
     # ~~ SettingsPlugin
 
@@ -273,6 +278,12 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
 
     # ~~ SimpleApiPlugin
 
+    def is_api_protected(self):
+        """
+        Check authentication on API calls
+        """
+        return True
+
     def get_api_commands(self):
         """
         Define the POST command API endpoints for the plugin.
@@ -342,7 +353,7 @@ class ExcludeRegionPlugin(  # pylint: disable=too-many-instance-attributes
 
     def on_api_command(self, command, data):
         """Route API requests to their implementations."""
-        if current_user.is_anonymous():
+        if current_user.is_anonymous:
             return "Insufficient rights", 403
 
         self._logger.debug("API command received: %s", data)
